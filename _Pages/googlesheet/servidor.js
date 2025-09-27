@@ -1299,6 +1299,9 @@ export async function crearSpreadsheetCompleto(nombre, descripcion = '') {
         const auth = await obtenerClienteAutenticado()
         const sheets = google.sheets({ version: 'v4', auth })
 
+        console.log('Creando nuevo spreadsheet:', nombre)
+
+        // Paso 1: Crear el spreadsheet
         const response = await sheets.spreadsheets.create({
             resource: {
                 properties: {
@@ -1313,7 +1316,18 @@ export async function crearSpreadsheetCompleto(nombre, descripcion = '') {
         })
 
         const spreadsheetId = response.data.spreadsheetId
+        console.log('Spreadsheet creado con ID:', spreadsheetId)
 
+        // Paso 2: Obtener información del sheet creado
+        const spreadsheetInfo = await sheets.spreadsheets.get({
+            spreadsheetId: spreadsheetId,
+            fields: 'sheets(properties(sheetId,title))'
+        })
+
+        const sheetId = spreadsheetInfo.data.sheets[0].properties.sheetId
+        console.log('Sheet ID obtenido:', sheetId)
+
+        // Paso 3: Agregar headers
         const headers = [
             'ID', 'Nombre', 'Apellidos', 'Teléfono', 'Email',
             'WhatsApp ID', 'Instagram ID', 'Facebook ID',
@@ -1330,34 +1344,46 @@ export async function crearSpreadsheetCompleto(nombre, descripcion = '') {
             }
         })
 
-        await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: spreadsheetId,
-            resource: {
-                requests: [{
-                    repeatCell: {
-                        range: {
-                            sheetId: 0,
-                            startRowIndex: 0,
-                            endRowIndex: 1
-                        },
-                        cell: {
-                            userEnteredFormat: {
-                                backgroundColor: {
-                                    red: 0.9,
-                                    green: 0.9,
-                                    blue: 0.9
-                                },
-                                textFormat: {
-                                    bold: true
-                                }
-                            }
-                        },
-                        fields: 'userEnteredFormat(backgroundColor,textFormat)'
-                    }
-                }]
-            }
-        })
+        console.log('Headers agregados exitosamente')
 
+        // Paso 4: Formatear headers (SIN usar sheetId 0, usar el sheetId real)
+        try {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId: spreadsheetId,
+                resource: {
+                    requests: [{
+                        repeatCell: {
+                            range: {
+                                sheetId: sheetId, // Usar el sheetId real, no 0
+                                startRowIndex: 0,
+                                endRowIndex: 1,
+                                startColumnIndex: 0,
+                                endColumnIndex: headers.length
+                            },
+                            cell: {
+                                userEnteredFormat: {
+                                    backgroundColor: {
+                                        red: 0.9,
+                                        green: 0.9,
+                                        blue: 0.9
+                                    },
+                                    textFormat: {
+                                        bold: true
+                                    }
+                                }
+                            },
+                            fields: 'userEnteredFormat(backgroundColor,textFormat)'
+                        }
+                    }]
+                }
+            })
+            console.log('Formato aplicado exitosamente')
+        } catch (formatError) {
+            console.log('Error al aplicar formato (no crítico):', formatError.message)
+            // No lanzamos error porque el spreadsheet ya está creado
+        }
+
+        // Paso 5: Registrar en log
         await db.execute(`
             INSERT INTO google_sheets_log (
                 usuario_id,
@@ -1371,12 +1397,16 @@ export async function crearSpreadsheetCompleto(nombre, descripcion = '') {
         `, [usuario.id, spreadsheetId, JSON.stringify({ 
             nombre: nombre,
             descripcion: descripcion,
-            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
+            sheetId: sheetId
         })])
+
+        console.log('Spreadsheet creado exitosamente')
 
         return {
             success: true,
             spreadsheetId: spreadsheetId,
+            sheetId: sheetId,
             url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
             message: 'Hoja de cálculo creada exitosamente'
         }
