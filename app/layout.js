@@ -37,18 +37,15 @@ export default function RootLayout({ children }) {
           strategy="afterInteractive"
         />
         <Script
-          nomodule
+          noModule
           src="https://cdn.jsdelivr.net/npm/ionicons@7.4.0/dist/ionicons/ionicons.js"
           strategy="afterInteractive"
         />
 
-        {/* Luckysheet JS */}
+        {/* Luckysheet JS - SIN onLoad para evitar errores de build */}
         <Script
           src="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/js/luckysheet.umd.js"
           strategy="afterInteractive"
-          onLoad={() => {
-            console.log("Luckysheet cargado");
-          }}
         />
       </body>
     </html>
