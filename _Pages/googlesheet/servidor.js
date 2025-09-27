@@ -292,6 +292,13 @@ export async function procesarCallbackGoogle(code) {
         const { tokens } = await oauth2Client.getToken(code)
         console.log('Tokens obtenidos exitosamente')
         
+        // DEBUG TOKENS RECIBIDOS
+        console.log('Tokens recibidos:', {
+            access_token: tokens.access_token ? 'EXISTS' : 'NULL',
+            refresh_token: tokens.refresh_token ? 'EXISTS' : 'NULL',
+            expiry_date: tokens.expiry_date || 'NULL'
+        })
+        
         oauth2Client.setCredentials(tokens)
 
         const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
@@ -300,6 +307,22 @@ export async function procesarCallbackGoogle(code) {
         console.log('Info de Google obtenida:', userInfo.data.email)
 
         console.log('Guardando conexión en base de datos...')
+        
+        //  ASEGURAR QUE NO HAY UNDEFINED
+        const refreshToken = tokens.refresh_token || null
+        const expiryDate = tokens.expiry_date ? new Date(tokens.expiry_date) : null
+        const googleUserId = userInfo.data.id || null
+        const nombreGoogle = userInfo.data.name || null
+        
+        console.log('Valores a insertar:', {
+            usuario_id: usuario.id,
+            email_google: userInfo.data.email,
+            google_user_id: googleUserId,
+            nombre_google: nombreGoogle,
+            refresh_token: refreshToken ? 'EXISTS' : 'NULL',
+            expires_at: expiryDate ? expiryDate.toISOString() : 'NULL'
+        })
+        
         await db.execute(`
             INSERT INTO google_sheets_conexiones (
                 usuario_id,
@@ -324,11 +347,11 @@ export async function procesarCallbackGoogle(code) {
         `, [
             usuario.id,
             userInfo.data.email,
-            userInfo.data.id,
-            userInfo.data.name,
+            googleUserId,
+            nombreGoogle,
             tokens.access_token,
-            tokens.refresh_token || null,
-            tokens.expiry_date ? new Date(tokens.expiry_date) : null
+            refreshToken,
+            expiryDate
         ])
 
         console.log('Conexión guardada en BD exitosamente')
@@ -342,8 +365,8 @@ export async function procesarCallbackGoogle(code) {
             ) VALUES (?, 'conectar', 'exitoso', ?)
         `, [usuario.id, JSON.stringify({
             email: userInfo.data.email,
-            nombre: userInfo.data.name,
-            google_user_id: userInfo.data.id
+            nombre: nombreGoogle,
+            google_user_id: googleUserId
         })])
 
         console.log('Log registrado exitosamente')
@@ -355,7 +378,7 @@ export async function procesarCallbackGoogle(code) {
         }
 
     } catch (error) {
-        console.error('ERROR DETALLADO en procesarCallbackGoogle:')
+        console.error(' ERROR DETALLADO en procesarCallbackGoogle:')
         console.error('Error message:', error.message)
         console.error('Error stack:', error.stack)
         
