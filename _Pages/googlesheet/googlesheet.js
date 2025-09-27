@@ -13,7 +13,8 @@ import {
     importarContactosDeSheet,
     sincronizarDatos,
     crearNuevoSheet,
-    eliminarSheet
+    eliminarSheet,
+    crearSpreadsheetCompleto
 } from "./servidor"
 
 export default function GoogleSheetsPage() {
@@ -35,10 +36,12 @@ export default function GoogleSheetsPage() {
     const [mensajeExito, setMensajeExito] = useState('')
     const [mostrarModalNuevoSheet, setMostrarModalNuevoSheet] = useState(false)
     const [mostrarModalConfiguracion, setMostrarModalConfiguracion] = useState(false)
+    const [mostrarModalNuevoSpreadsheet, setMostrarModalNuevoSpreadsheet] = useState(false)
     const [nombreNuevoSheet, setNombreNuevoSheet] = useState('')
+    const [nombreNuevoSpreadsheet, setNombreNuevoSpreadsheet] = useState('')
+    const [descripcionNuevoSpreadsheet, setDescripcionNuevoSpreadsheet] = useState('')
     const [incluirHeaders, setIncluirHeaders] = useState(true)
     
-    // Estados para configuración
     const [clientId, setClientId] = useState('')
     const [clientSecret, setClientSecret] = useState('')
     const [redirectUri, setRedirectUri] = useState('')
@@ -108,14 +111,14 @@ export default function GoogleSheetsPage() {
                 await cargarSpreadsheets()
             }
         } catch (error) {
-            console.log('Error al cargar configuración:', error)
-            setMensajeError('Error al cargar configuración de Google Sheets')
+            console.log('Error al cargar configuracion:', error)
+            setMensajeError('Error al cargar configuracion de Google Sheets')
         }
     }
 
     const manejarGuardarConfiguracion = async () => {
         if (!clientId.trim() || !clientSecret.trim() || !redirectUri.trim()) {
-            setMensajeError('Todos los campos de configuración son requeridos')
+            setMensajeError('Todos los campos de configuracion son requeridos')
             return
         }
         
@@ -124,10 +127,9 @@ export default function GoogleSheetsPage() {
             setMensajeError('')
             
             await guardarConfiguracionGoogle(clientId, clientSecret, redirectUri)
-            setMensajeExito('Configuración guardada exitosamente')
+            setMensajeExito('Configuracion guardada exitosamente')
             setMostrarModalConfiguracion(false)
             
-            // Limpiar formulario
             setClientId('')
             setClientSecret('')
             setRedirectUri('')
@@ -135,37 +137,36 @@ export default function GoogleSheetsPage() {
             await cargarConfiguracion()
             
         } catch (error) {
-            console.log('Error al guardar configuración:', error)
-            setMensajeError('Error al guardar configuración: ' + error.message)
+            console.log('Error al guardar configuracion:', error)
+            setMensajeError('Error al guardar configuracion: ' + error.message)
         } finally {
             setProcesando(false)
         }
     }
 
-const manejarVerificarCredenciales = async () => {
-    try {
-        setVerificando(true)
-        setMensajeError('')
-        
-        const resultado = await verificarCredenciales()
-        
-        if (resultado.success) {
-            setMensajeExito('Credenciales verificadas. Redirigiendo a Google...')
-            // OPCIÓN 1: Redirigir en la misma ventana
-            setTimeout(() => {
-                window.location.href = resultado.authUrl
-            }, 1000)
-        } else {
-            setMensajeError(resultado.error || 'Error al verificar credenciales')
+    const manejarVerificarCredenciales = async () => {
+        try {
+            setVerificando(true)
+            setMensajeError('')
+            
+            const resultado = await verificarCredenciales()
+            
+            if (resultado.success) {
+                setMensajeExito('Credenciales verificadas. Redirigiendo a Google...')
+                setTimeout(() => {
+                    window.location.href = resultado.authUrl
+                }, 1000)
+            } else {
+                setMensajeError(resultado.error || 'Error al verificar credenciales')
+            }
+            
+        } catch (error) {
+            console.log('Error al verificar credenciales:', error)
+            setMensajeError('Error al verificar credenciales')
+        } finally {
+            setVerificando(false)
         }
-        
-    } catch (error) {
-        console.log('Error al verificar credenciales:', error)
-        setMensajeError('Error al verificar credenciales')
-    } finally {
-        setVerificando(false)
     }
-}
 
     const cargarSpreadsheets = async () => {
         try {
@@ -174,7 +175,7 @@ const manejarVerificarCredenciales = async () => {
             setSpreadsheets(data)
         } catch (error) {
             console.log('Error al cargar spreadsheets:', error)
-            setMensajeError('Error al cargar hojas de cálculo')
+            setMensajeError('Error al cargar hojas de calculo')
         } finally {
             setLoadingSpreadsheets(false)
         }
@@ -191,7 +192,7 @@ const manejarVerificarCredenciales = async () => {
             }
         } catch (error) {
             console.log('Error al cargar sheets:', error)
-            setMensajeError('Error al cargar pestañas')
+            setMensajeError('Error al cargar pestanas')
         } finally {
             setLoadingSheets(false)
         }
@@ -212,9 +213,41 @@ const manejarVerificarCredenciales = async () => {
         }
     }
 
+    const manejarCrearNuevoSpreadsheet = async () => {
+        if (!nombreNuevoSpreadsheet.trim()) {
+            setMensajeError('Ingresa un nombre para la nueva hoja de calculo')
+            return
+        }
+        
+        try {
+            setProcesando(true)
+            setMensajeError('')
+            
+            const resultado = await crearSpreadsheetCompleto(nombreNuevoSpreadsheet, descripcionNuevoSpreadsheet)
+            
+            if (resultado.success) {
+                setMensajeExito(`Hoja de calculo creada exitosamente: ${nombreNuevoSpreadsheet}`)
+                setMostrarModalNuevoSpreadsheet(false)
+                setNombreNuevoSpreadsheet('')
+                setDescripcionNuevoSpreadsheet('')
+                
+                await cargarSpreadsheets()
+                setSpreadsheetSeleccionado(resultado.spreadsheetId)
+            } else {
+                setMensajeError(resultado.error || 'Error al crear hoja de calculo')
+            }
+            
+        } catch (error) {
+            console.log('Error al crear spreadsheet:', error)
+            setMensajeError('Error al crear hoja de calculo')
+        } finally {
+            setProcesando(false)
+        }
+    }
+
     const manejarExportar = async () => {
         if (!spreadsheetSeleccionado || !sheetSeleccionado) {
-            setMensajeError('Selecciona una hoja de cálculo y pestaña')
+            setMensajeError('Selecciona una hoja de calculo y pestana')
             return
         }
         
@@ -245,7 +278,7 @@ const manejarVerificarCredenciales = async () => {
 
     const manejarImportar = async () => {
         if (!spreadsheetSeleccionado || !sheetSeleccionado) {
-            setMensajeError('Selecciona una hoja de cálculo y pestaña')
+            setMensajeError('Selecciona una hoja de calculo y pestana')
             return
         }
         
@@ -274,7 +307,7 @@ const manejarVerificarCredenciales = async () => {
 
     const manejarSincronizar = async () => {
         if (!spreadsheetSeleccionado || !sheetSeleccionado) {
-            setMensajeError('Selecciona una hoja de cálculo y pestaña')
+            setMensajeError('Selecciona una hoja de calculo y pestana')
             return
         }
         
@@ -301,7 +334,7 @@ const manejarVerificarCredenciales = async () => {
 
     const manejarCrearNuevoSheet = async () => {
         if (!nombreNuevoSheet.trim() || !spreadsheetSeleccionado) {
-            setMensajeError('Ingresa un nombre para la nueva pestaña')
+            setMensajeError('Ingresa un nombre para la nueva pestana')
             return
         }
         
@@ -312,17 +345,17 @@ const manejarVerificarCredenciales = async () => {
             const resultado = await crearNuevoSheet(spreadsheetSeleccionado, nombreNuevoSheet)
             
             if (resultado.success) {
-                setMensajeExito('Nueva pestaña creada exitosamente')
+                setMensajeExito('Nueva pestana creada exitosamente')
                 setMostrarModalNuevoSheet(false)
                 setNombreNuevoSheet('')
                 await cargarSpreadsheets()
             } else {
-                setMensajeError(resultado.error || 'Error al crear pestaña')
+                setMensajeError(resultado.error || 'Error al crear pestana')
             }
             
         } catch (error) {
             console.log('Error al crear sheet:', error)
-            setMensajeError('Error al crear nueva pestaña')
+            setMensajeError('Error al crear nueva pestana')
         } finally {
             setProcesando(false)
         }
@@ -330,11 +363,11 @@ const manejarVerificarCredenciales = async () => {
 
     const manejarEliminarSheet = async () => {
         if (!sheetSeleccionado || !spreadsheetSeleccionado) {
-            setMensajeError('Selecciona una pestaña para eliminar')
+            setMensajeError('Selecciona una pestana para eliminar')
             return
         }
         
-        if (!confirm('¿Estás seguro de que quieres eliminar esta pestaña? Esta acción no se puede deshacer.')) {
+        if (!confirm('Estas seguro de que quieres eliminar esta pestana? Esta accion no se puede deshacer.')) {
             return
         }
         
@@ -345,17 +378,17 @@ const manejarVerificarCredenciales = async () => {
             const resultado = await eliminarSheet(spreadsheetSeleccionado, sheetSeleccionado)
             
             if (resultado.success) {
-                setMensajeExito('Pestaña eliminada exitosamente')
+                setMensajeExito('Pestana eliminada exitosamente')
                 setSheetSeleccionado('')
                 setDatosSheet([])
                 await cargarSpreadsheets()
             } else {
-                setMensajeError(resultado.error || 'Error al eliminar pestaña')
+                setMensajeError(resultado.error || 'Error al eliminar pestana')
             }
             
         } catch (error) {
             console.log('Error al eliminar sheet:', error)
-            setMensajeError('Error al eliminar pestaña')
+            setMensajeError('Error al eliminar pestana')
         } finally {
             setProcesando(false)
         }
@@ -417,11 +450,11 @@ const manejarVerificarCredenciales = async () => {
                             <div className={estilos.connectionDetails}>
                                 <p>
                                     <strong>Estado:</strong> 
-                                    {configuracion?.credenciales_validas ? ' Credenciales válidas y conectado' : ' Credenciales guardadas, pendiente de verificación'}
+                                    {configuracion?.credenciales_validas ? ' Credenciales validas y conectado' : ' Credenciales guardadas, pendiente de verificacion'}
                                 </p>
                                 {configuracion?.ultima_verificacion && (
                                     <p>
-                                        <strong>Última verificación:</strong> {formatearFecha(configuracion.ultima_verificacion)}
+                                        <strong>Ultima verificacion:</strong> {formatearFecha(configuracion.ultima_verificacion)}
                                     </p>
                                 )}
                             </div>
@@ -471,14 +504,14 @@ const manejarVerificarCredenciales = async () => {
                     <div className={estilos.controlsSection}>
                         <div className={estilos.selectorsContainer}>
                             <div className={estilos.selectorGroup}>
-                                <label>Hoja de cálculo</label>
+                                <label>Hoja de calculo</label>
                                 <select 
                                     value={spreadsheetSeleccionado}
                                     onChange={(e) => setSpreadsheetSeleccionado(e.target.value)}
                                     disabled={loadingSpreadsheets}
                                     className={estilos.selector}
                                 >
-                                    <option value="">Seleccionar hoja de cálculo</option>
+                                    <option value="">Seleccionar hoja de calculo</option>
                                     {spreadsheets.map(sheet => (
                                         <option key={sheet.id} value={sheet.id}>
                                             {sheet.name}
@@ -491,14 +524,14 @@ const manejarVerificarCredenciales = async () => {
                             </div>
 
                             <div className={estilos.selectorGroup}>
-                                <label>Pestaña</label>
+                                <label>Pestana</label>
                                 <select 
                                     value={sheetSeleccionado}
                                     onChange={(e) => setSheetSeleccionado(e.target.value)}
                                     disabled={loadingSheets || !spreadsheetSeleccionado}
                                     className={estilos.selector}
                                 >
-                                    <option value="">Seleccionar pestaña</option>
+                                    <option value="">Seleccionar pestana</option>
                                     {sheets.map(sheet => (
                                         <option key={sheet.id} value={sheet.title}>
                                             {sheet.title}
@@ -509,6 +542,26 @@ const manejarVerificarCredenciales = async () => {
                                     <div className={estilos.loadingSpinner}></div>
                                 )}
                             </div>
+                        </div>
+
+                        <div className={estilos.spreadsheetActions}>
+                            <button 
+                                onClick={() => setMostrarModalNuevoSpreadsheet(true)}
+                                disabled={procesando}
+                                className={`${estilos.button} ${estilos.buttonSuccess}`}
+                            >
+                                <ion-icon name="add-circle-outline"></ion-icon>
+                                Crear Nueva Hoja de Calculo
+                            </button>
+                            
+                            <button 
+                                onClick={cargarSpreadsheets}
+                                disabled={loadingSpreadsheets}
+                                className={`${estilos.button} ${estilos.buttonSecondary}`}
+                            >
+                                <ion-icon name="refresh-outline"></ion-icon>
+                                Actualizar Lista
+                            </button>
                         </div>
 
                         <div className={estilos.actionsContainer}>
@@ -557,7 +610,7 @@ const manejarVerificarCredenciales = async () => {
                             </div>
 
                             <div className={estilos.actionGroup}>
-                                <h3>Gestión de pestañas</h3>
+                                <h3>Gestion de pestanas</h3>
                                 <div className={estilos.buttonGrid}>
                                     <button 
                                         onClick={() => setMostrarModalNuevoSheet(true)}
@@ -565,7 +618,7 @@ const manejarVerificarCredenciales = async () => {
                                         className={`${estilos.button} ${estilos.buttonPrimary}`}
                                     >
                                         <ion-icon name="add-outline"></ion-icon>
-                                        Nueva pestaña
+                                        Nueva pestana
                                     </button>
 
                                     <button 
@@ -574,7 +627,7 @@ const manejarVerificarCredenciales = async () => {
                                         className={`${estilos.button} ${estilos.buttonDanger}`}
                                     >
                                         <ion-icon name="trash-outline"></ion-icon>
-                                        Eliminar pestaña
+                                        Eliminar pestana
                                     </button>
                                 </div>
                             </div>
@@ -630,7 +683,7 @@ const manejarVerificarCredenciales = async () => {
                                 <div className={estilos.emptyData}>
                                     <ion-icon name="document-outline"></ion-icon>
                                     <p>No hay datos para mostrar</p>
-                                    <span>Selecciona una hoja de cálculo y pestaña para ver los datos</span>
+                                    <span>Selecciona una hoja de calculo y pestana para ver los datos</span>
                                 </div>
                             )}
                         </div>
@@ -659,7 +712,7 @@ const manejarVerificarCredenciales = async () => {
                                     <li>Crea un proyecto o selecciona uno existente</li>
                                     <li>Habilita la API de Google Sheets y Google Drive</li>
                                     <li>Crea credenciales OAuth 2.0</li>
-                                    <li>Copia y pega los datos aquí</li>
+                                    <li>Copia y pega los datos aqui</li>
                                 </ol>
                             </div>
                             
@@ -717,7 +770,75 @@ const manejarVerificarCredenciales = async () => {
                                 ) : (
                                     <>
                                         <ion-icon name="save-outline"></ion-icon>
-                                        Guardar Configuración
+                                        Guardar Configuracion
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {mostrarModalNuevoSpreadsheet && (
+                <div className={estilos.modalOverlay}>
+                    <div className={estilos.modal}>
+                        <div className={estilos.modalHeader}>
+                            <h3>Crear Nueva Hoja de Calculo</h3>
+                            <button 
+                                onClick={() => setMostrarModalNuevoSpreadsheet(false)}
+                                className={estilos.modalClose}
+                            >
+                                <ion-icon name="close-outline"></ion-icon>
+                            </button>
+                        </div>
+                        
+                        <div className={estilos.modalContent}>
+                            <div className={estilos.inputGroup}>
+                                <label>Nombre de la hoja de calculo</label>
+                                <input 
+                                    type="text"
+                                    value={nombreNuevoSpreadsheet}
+                                    onChange={(e) => setNombreNuevoSpreadsheet(e.target.value)}
+                                    placeholder="CRM Contactos 2025"
+                                    className={estilos.input}
+                                />
+                            </div>
+                            
+                            <div className={estilos.inputGroup}>
+                                <label>Descripcion (opcional)</label>
+                                <textarea 
+                                    value={descripcionNuevoSpreadsheet}
+                                    onChange={(e) => setDescripcionNuevoSpreadsheet(e.target.value)}
+                                    placeholder="Hoja de calculo para gestionar contactos del CRM"
+                                    className={estilos.input}
+                                    rows="3"
+                                />
+                            </div>
+                            
+                            <div className={estilos.infoBox}>
+                                <ion-icon name="information-circle-outline"></ion-icon>
+                                <span>Se creara automaticamente con una pestana Contactos y las columnas apropiadas.</span>
+                            </div>
+                        </div>
+                        
+                        <div className={estilos.modalActions}>
+                            <button 
+                                onClick={() => setMostrarModalNuevoSpreadsheet(false)}
+                                className={`${estilos.button} ${estilos.buttonSecondary}`}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={manejarCrearNuevoSpreadsheet}
+                                disabled={procesando || !nombreNuevoSpreadsheet.trim()}
+                                className={`${estilos.button} ${estilos.buttonSuccess}`}
+                            >
+                                {procesando ? (
+                                    <div className={estilos.loadingSpinner}></div>
+                                ) : (
+                                    <>
+                                        <ion-icon name="add-circle-outline"></ion-icon>
+                                        Crear Hoja de Calculo
                                     </>
                                 )}
                             </button>
@@ -730,7 +851,7 @@ const manejarVerificarCredenciales = async () => {
                 <div className={estilos.modalOverlay}>
                     <div className={estilos.modal}>
                         <div className={estilos.modalHeader}>
-                            <h3>Crear nueva pestaña</h3>
+                            <h3>Crear nueva pestana</h3>
                             <button 
                                 onClick={() => setMostrarModalNuevoSheet(false)}
                                 className={estilos.modalClose}
@@ -741,7 +862,7 @@ const manejarVerificarCredenciales = async () => {
                         
                         <div className={estilos.modalContent}>
                             <div className={estilos.inputGroup}>
-                                <label>Nombre de la pestaña</label>
+                                <label>Nombre de la pestana</label>
                                 <input 
                                     type="text"
                                     value={nombreNuevoSheet}
