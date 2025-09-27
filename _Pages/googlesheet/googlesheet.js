@@ -142,28 +142,30 @@ export default function GoogleSheetsPage() {
         }
     }
 
-    const manejarVerificarCredenciales = async () => {
-        try {
-            setVerificando(true)
-            setMensajeError('')
-            
-            const resultado = await verificarCredenciales()
-            
-            if (resultado.success) {
-                setMensajeExito('Credenciales verificadas exitosamente. Abriendo ventana de autorización...')
-                // Abrir ventana de autorización OAuth
-                window.open(resultado.authUrl, '_blank', 'width=500,height=600')
-            } else {
-                setMensajeError(resultado.error || 'Error al verificar credenciales')
-            }
-            
-        } catch (error) {
-            console.log('Error al verificar credenciales:', error)
-            setMensajeError('Error al verificar credenciales')
-        } finally {
-            setVerificando(false)
+const manejarVerificarCredenciales = async () => {
+    try {
+        setVerificando(true)
+        setMensajeError('')
+        
+        const resultado = await verificarCredenciales()
+        
+        if (resultado.success) {
+            setMensajeExito('Credenciales verificadas. Redirigiendo a Google...')
+            // OPCIÓN 1: Redirigir en la misma ventana
+            setTimeout(() => {
+                window.location.href = resultado.authUrl
+            }, 1000)
+        } else {
+            setMensajeError(resultado.error || 'Error al verificar credenciales')
         }
+        
+    } catch (error) {
+        console.log('Error al verificar credenciales:', error)
+        setMensajeError('Error al verificar credenciales')
+    } finally {
+        setVerificando(false)
     }
+}
 
     const cargarSpreadsheets = async () => {
         try {

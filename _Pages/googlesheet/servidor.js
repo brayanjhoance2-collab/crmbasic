@@ -11,11 +11,25 @@ export async function obtenerUsuarioActual() {
         const cookieStore = await cookies()
         const token = cookieStore.get('auth-token')
         
-        if (!token) {
+        console.log('=== DEBUG obtenerUsuarioActual ===')
+        console.log('Token existe:', !!token)
+        
+        if (!token || !token.value) {
+            console.log('No hay token de autenticación')
             return null
         }
 
-        const decoded = jwt.verify(token.value, JWT_SECRET)
+        console.log('Token value length:', token.value.length)
+
+        let decoded
+        try {
+            decoded = jwt.verify(token.value, JWT_SECRET)
+            console.log('Token decodificado exitosamente, userId:', decoded.userId)
+        } catch (error) {
+            console.log('Error al verificar token:', error.message)
+            return null
+        }
+
         const userId = decoded.userId
 
         const [rows] = await db.execute(`
@@ -35,16 +49,24 @@ export async function obtenerUsuarioActual() {
         `, [userId])
 
         if (rows.length === 0) {
+            console.log('Usuario no encontrado o inactivo')
             return null
         }
 
         const usuario = rows[0]
-        
-        await db.execute(`
-            UPDATE usuarios 
-            SET ultimo_acceso = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        `, [userId])
+        console.log('Usuario encontrado:', usuario.correo)
+
+        const ahora = new Date()
+        const ultimoAcceso = new Date(usuario.ultimo_acceso)
+        const diferenciaMinutos = (ahora - ultimoAcceso) / (1000 * 60)
+
+        if (diferenciaMinutos > 5) {
+            await db.execute(`
+                UPDATE usuarios 
+                SET ultimo_acceso = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            `, [userId])
+        }
 
         return {
             id: usuario.id,
@@ -61,13 +83,7 @@ export async function obtenerUsuarioActual() {
         }
 
     } catch (error) {
-        console.log('Error al obtener usuario actual:', error)
-        
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-            const cookieStore = await cookies()
-            cookieStore.delete('auth-token')
-        }
-        
+        console.error('Error al obtener usuario actual:', error.message)
         return null
     }
 }
@@ -250,6 +266,122 @@ export async function verificarCredenciales() {
     }
 }
 
+export async function procesarCallbackGoogle(code) {
+    try {
+        console.log('=== INICIANDO procesarCallbackGoogle ===')
+        console.log('Código recibido:', code.substring(0, 20) + '...')
+        
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            console.log('Usuario no autenticado en callback')
+            throw new Error('Usuario no autenticado. Por favor, inicia sesión nuevamente.')
+        }
+
+        console.log('Usuario autenticado:', usuario.correo, 'ID:', usuario.id)
+
+        const config = await obtenerConfiguracionActiva()
+        console.log('Configuración obtenida:', config.client_id)
+
+        const oauth2Client = new google.auth.OAuth2(
+            config.client_id,
+            config.client_secret,
+            config.redirect_uri
+        )
+
+        console.log('Intercambiando código por tokens...')
+        const { tokens } = await oauth2Client.getToken(code)
+        console.log('Tokens obtenidos exitosamente')
+        
+        oauth2Client.setCredentials(tokens)
+
+        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
+        console.log('Obteniendo información del usuario de Google...')
+        const userInfo = await oauth2.userinfo.get()
+        console.log('Info de Google obtenida:', userInfo.data.email)
+
+        console.log('Guardando conexión en base de datos...')
+        await db.execute(`
+            INSERT INTO google_sheets_conexiones (
+                usuario_id,
+                email_google,
+                google_user_id,
+                nombre_google,
+                access_token,
+                refresh_token,
+                expires_at,
+                estado,
+                fecha_conexion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'conectado', NOW())
+            ON DUPLICATE KEY UPDATE
+                email_google = VALUES(email_google),
+                google_user_id = VALUES(google_user_id),
+                nombre_google = VALUES(nombre_google),
+                access_token = VALUES(access_token),
+                refresh_token = VALUES(refresh_token),
+                expires_at = VALUES(expires_at),
+                estado = 'conectado',
+                fecha_conexion = NOW()
+        `, [
+            usuario.id,
+            userInfo.data.email,
+            userInfo.data.id,
+            userInfo.data.name,
+            tokens.access_token,
+            tokens.refresh_token || null,
+            tokens.expiry_date ? new Date(tokens.expiry_date) : null
+        ])
+
+        console.log('Conexión guardada en BD exitosamente')
+
+        await db.execute(`
+            INSERT INTO google_sheets_log (
+                usuario_id,
+                operacion,
+                estado_operacion,
+                detalles
+            ) VALUES (?, 'conectar', 'exitoso', ?)
+        `, [usuario.id, JSON.stringify({
+            email: userInfo.data.email,
+            nombre: userInfo.data.name,
+            google_user_id: userInfo.data.id
+        })])
+
+        console.log('Log registrado exitosamente')
+
+        return {
+            success: true,
+            message: 'Conectado exitosamente a Google Sheets',
+            usuario: userInfo.data.email
+        }
+
+    } catch (error) {
+        console.error('ERROR DETALLADO en procesarCallbackGoogle:')
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
+        
+        try {
+            const usuario = await obtenerUsuarioActual()
+            if (usuario) {
+                await db.execute(`
+                    INSERT INTO google_sheets_log (
+                        usuario_id,
+                        operacion,
+                        estado_operacion,
+                        mensaje_error
+                    ) VALUES (?, 'conectar', 'fallido', ?)
+                `, [usuario.id, error.message])
+            }
+        } catch (logError) {
+            console.error('Error al registrar log de error:', logError)
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
 async function obtenerClienteAutenticado() {
     const usuario = await obtenerUsuarioActual()
     if (!usuario) {
@@ -310,97 +442,6 @@ async function obtenerClienteAutenticado() {
     }
 
     return oauth2Client
-}
-
-export async function procesarCallbackGoogle(code) {
-    try {
-        const usuario = await obtenerUsuarioActual()
-        if (!usuario) {
-            throw new Error('Usuario no autenticado')
-        }
-
-        const config = await obtenerConfiguracionActiva()
-
-        const oauth2Client = new google.auth.OAuth2(
-            config.client_id,
-            config.client_secret,
-            config.redirect_uri
-        )
-
-        const { tokens } = await oauth2Client.getToken(code)
-        oauth2Client.setCredentials(tokens)
-
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
-        const userInfo = await oauth2.userinfo.get()
-
-        await db.execute(`
-            INSERT INTO google_sheets_conexiones (
-                usuario_id,
-                email_google,
-                google_user_id,
-                nombre_google,
-                access_token,
-                refresh_token,
-                expires_at,
-                estado,
-                fecha_conexion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'conectado', NOW())
-            ON DUPLICATE KEY UPDATE
-                email_google = VALUES(email_google),
-                google_user_id = VALUES(google_user_id),
-                nombre_google = VALUES(nombre_google),
-                access_token = VALUES(access_token),
-                refresh_token = VALUES(refresh_token),
-                expires_at = VALUES(expires_at),
-                estado = 'conectado',
-                fecha_conexion = NOW()
-        `, [
-            usuario.id,
-            userInfo.data.email,
-            userInfo.data.id,
-            userInfo.data.name,
-            tokens.access_token,
-            tokens.refresh_token || null,
-            tokens.expiry_date ? new Date(tokens.expiry_date) : null
-        ])
-
-        await db.execute(`
-            INSERT INTO google_sheets_log (
-                usuario_id,
-                operacion,
-                estado_operacion,
-                detalles
-            ) VALUES (?, 'conectar', 'exitoso', ?)
-        `, [usuario.id, JSON.stringify({
-            email: userInfo.data.email,
-            nombre: userInfo.data.name
-        })])
-
-        return {
-            success: true,
-            message: 'Conectado exitosamente a Google Sheets'
-        }
-
-    } catch (error) {
-        console.log('Error al procesar callback:', error)
-        
-        const usuario = await obtenerUsuarioActual()
-        if (usuario) {
-            await db.execute(`
-                INSERT INTO google_sheets_log (
-                    usuario_id,
-                    operacion,
-                    estado_operacion,
-                    mensaje_error
-                ) VALUES (?, 'conectar', 'fallido', ?)
-            `, [usuario.id, error.message])
-        }
-        
-        return {
-            success: false,
-            error: error.message
-        }
-    }
 }
 
 export async function obtenerSpreadsheets() {
@@ -918,7 +959,6 @@ export async function crearNuevoSheet(spreadsheetId, nombreSheet) {
                 ) VALUES (?, 'crear_sheet', 'fallido', ?)
             `, [usuario.id, error.message])
         }
-        
         throw error
     }
 }
@@ -981,7 +1021,8 @@ export async function eliminarSheet(spreadsheetId, nombreSheet) {
         if (usuario) {
             await db.execute(`
                 INSERT INTO google_sheets_log (
-                    usuario_id,operacion,
+                    usuario_id,
+                    operacion,
                     estado_operacion,
                     mensaje_error
                 ) VALUES (?, 'eliminar_sheet', 'fallido', ?)

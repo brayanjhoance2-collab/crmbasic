@@ -54,6 +54,7 @@ export async function iniciarSesion(correo, contrasena) {
         if (!contrasenaValida) {
             throw new Error('Credenciales incorrectas')
         }
+
         // Crear token JWT con datos del usuario
         const tokenPayload = {
             userId: usuario.id,
@@ -73,12 +74,12 @@ export async function iniciarSesion(correo, contrasena) {
             }
         )
 
-        // Guardar token en cookies httpOnly
+        // ✅ COOKIE CORREGIDA PARA OAUTH
         const cookieStore = await cookies()
         cookieStore.set('auth-token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax', // ✅ CAMBIADO DE 'strict' A 'lax' PARA OAUTH
             maxAge: 7 * 24 * 60 * 60, // 7 días en segundos
             path: '/'
         })
@@ -136,23 +137,30 @@ export async function iniciarSesion(correo, contrasena) {
     }
 }
 
-// Función para obtener usuario actual desde token
+// ✅ FUNCIÓN CORREGIDA PARA OBTENER USUARIO ACTUAL
 export async function obtenerUsuarioActual() {
     try {
         const cookieStore = await cookies()
         const token = cookieStore.get('auth-token')
         
+        console.log('=== DEBUG obtenerUsuarioActual ===')
+        console.log('Token existe:', !!token)
+        
         if (!token || !token.value) {
+            console.log('No hay token de autenticación')
             return null
         }
+
+        console.log('Token value length:', token.value.length)
 
         // Verificar y decodificar el token JWT
         let decoded
         try {
             decoded = jwt.verify(token.value, JWT_SECRET)
+            console.log('Token decodificado exitosamente, userId:', decoded.userId)
         } catch (error) {
             // Token inválido o expirado
-            console.log('Token inválido:', error.message)
+            console.log('Error al verificar token:', error.message)
             await cerrarSesion() // Limpiar cookies
             return null
         }
@@ -178,11 +186,26 @@ export async function obtenerUsuarioActual() {
 
         if (rows.length === 0) {
             // Usuario no existe o está inactivo
+            console.log('Usuario no encontrado o inactivo')
             await cerrarSesion()
             return null
         }
 
         const usuario = rows[0]
+        console.log('Usuario encontrado:', usuario.correo)
+
+        // Actualizar último acceso solo si han pasado más de 5 minutos
+        const ahora = new Date()
+        const ultimoAcceso = new Date(usuario.ultimo_acceso)
+        const diferenciaMinutos = (ahora - ultimoAcceso) / (1000 * 60)
+
+        if (diferenciaMinutos > 5) {
+            await db.execute(`
+                UPDATE usuarios 
+                SET ultimo_acceso = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            `, [userId])
+        }
 
         return {
             id: usuario.id,
@@ -199,7 +222,7 @@ export async function obtenerUsuarioActual() {
         }
 
     } catch (error) {
-        console.log('Error al obtener usuario actual:', error.message)
+        console.error('Error al obtener usuario actual:', error.message)
         return null
     }
 }
@@ -223,6 +246,54 @@ export async function cerrarSesion() {
     } catch (error) {
         console.log('Error al cerrar sesión:', error.message)
         throw new Error('Error al cerrar sesión')
+    }
+}
+
+// ✅ FUNCIÓN PARA REFRESCAR TOKEN CON COOKIE CORREGIDA
+export async function refrescarToken() {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        // Crear nuevo token con tiempo extendido
+        const tokenPayload = {
+            userId: usuario.id,
+            correo: usuario.correo,
+            rol: usuario.rol,
+            nombre: usuario.nombre,
+            apellidos: usuario.apellidos
+        }
+
+        const nuevoToken = jwt.sign(
+            tokenPayload,
+            JWT_SECRET,
+            { 
+                expiresIn: '7d',
+                issuer: 'crm-social',
+                audience: 'crm-users'
+            }
+        )
+
+        // ✅ ACTUALIZAR COOKIE CON sameSite: 'lax'
+        const cookieStore = await cookies()
+        cookieStore.set('auth-token', nuevoToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax', // ✅ PARA COMPATIBILIDAD CON OAUTH
+            maxAge: 7 * 24 * 60 * 60,
+            path: '/'
+        })
+
+        return {
+            success: true,
+            message: 'Token renovado correctamente'
+        }
+
+    } catch (error) {
+        console.log('Error al refrescar token:', error.message)
+        throw error
     }
 }
 
@@ -350,54 +421,6 @@ export async function validarToken(token) {
     }
 }
 
-// Función para refrescar token (renovar sesión)
-export async function refrescarToken() {
-    try {
-        const usuario = await obtenerUsuarioActual()
-        if (!usuario) {
-            throw new Error('Usuario no autenticado')
-        }
-
-        // Crear nuevo token con tiempo extendido
-        const tokenPayload = {
-            userId: usuario.id,
-            correo: usuario.correo,
-            rol: usuario.rol,
-            nombre: usuario.nombre,
-            apellidos: usuario.apellidos
-        }
-
-        const nuevoToken = jwt.sign(
-            tokenPayload,
-            JWT_SECRET,
-            { 
-                expiresIn: '7d',
-                issuer: 'crm-social',
-                audience: 'crm-users'
-            }
-        )
-
-        // Actualizar cookie
-        const cookieStore = await cookies()
-        cookieStore.set('auth-token', nuevoToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60,
-            path: '/'
-        })
-
-        return {
-            success: true,
-            message: 'Token renovado correctamente'
-        }
-
-    } catch (error) {
-        console.log('Error al refrescar token:', error.message)
-        throw error
-    }
-}
-
 // Función para verificar integridad de la base de datos
 export async function verificarIntegridadSistema() {
     try {
@@ -415,7 +438,9 @@ export async function verificarIntegridadSistema() {
             'mensajes',
             'configuraciones_whatsapp',
             'configuraciones_instagram',
-            'configuraciones_facebook'
+            'configuraciones_facebook',
+            'google_sheets_configuracion',
+            'google_sheets_conexiones'
         ]
 
         const verificaciones = await Promise.all(
