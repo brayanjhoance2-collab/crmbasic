@@ -21,7 +21,6 @@ import {
 
 export default function GoogleSheetsPage() {
     const router = useRouter()
-    const luckysheetRef = useRef(null)
     const [usuario, setUsuario] = useState(null)
     const [loading, setLoading] = useState(true)
     const [configuracion, setConfiguracion] = useState(null)
@@ -87,10 +86,12 @@ export default function GoogleSheetsPage() {
 
     // Cargar Luckysheet cuando tengamos datos
     useEffect(() => {
-        if (datosSheet.length > 0 && !luckysheetIniciado) {
-            inicializarLuckysheet()
+        if ((datosSheet.length > 0 || (sheetSeleccionado && spreadsheetSeleccionado)) && !luckysheetIniciado) {
+            setTimeout(() => {
+                inicializarLuckysheet()
+            }, 500)
         }
-    }, [datosSheet, luckysheetIniciado])
+    }, [datosSheet, sheetSeleccionado, spreadsheetSeleccionado, luckysheetIniciado])
 
     const verificarYCargarDatos = async () => {
         try {
@@ -220,14 +221,21 @@ export default function GoogleSheetsPage() {
         } catch (error) {
             console.log('Error al cargar datos:', error)
             setMensajeError('Error al cargar datos del sheet')
+            setDatosSheet([]) // Inicializar como vacío si hay error
         } finally {
             setLoadingDatos(false)
         }
     }
 
     const convertirDatosParaLuckysheet = (datos) => {
+        // Si no hay datos, crear una hoja vacía con headers básicos
         if (!datos || datos.length === 0) {
-            return []
+            const headersBasicos = ['ID', 'Nombre', 'Apellidos', 'Telefono', 'Email', 'Ciudad', 'Pais']
+            return headersBasicos.map((header, colIndex) => ({
+                r: 0,
+                c: colIndex,
+                v: header
+            }))
         }
 
         const headers = Object.keys(datos[0])
@@ -248,29 +256,45 @@ export default function GoogleSheetsPage() {
     }
 
     const inicializarLuckysheet = () => {
-        if (typeof window !== 'undefined' && window.luckysheet && datosSheet.length > 0) {
-            const datos = convertirDatosParaLuckysheet(datosSheet)
-            
-            const options = {
-                container: 'luckysheet-container',
-                showtoolbar: true,
-                showinfobar: true,
-                showsheetbar: true,
-                allowCopy: true,
-                allowEdit: true,
-                enableAddRow: true,
-                enableAddCol: true,
-                data: [{
-                    name: sheetSeleccionado || 'Sheet1',
-                    celldata: datos,
-                    row: Math.max(50, datosSheet.length + 10),
-                    column: Math.max(26, Object.keys(datosSheet[0] || {}).length + 5)
-                }],
-                lang: 'es'
-            }
+        if (typeof window !== 'undefined' && window.luckysheet) {
+            try {
+                // Destruir instancia anterior si existe
+                if (luckysheetIniciado) {
+                    window.luckysheet.destroy()
+                }
 
-            window.luckysheet.create(options)
-            setLuckysheetIniciado(true)
+                const datos = convertirDatosParaLuckysheet(datosSheet)
+                
+                const options = {
+                    container: 'luckysheet-container',
+                    showtoolbar: true,
+                    showinfobar: true,
+                    showsheetbar: false,
+                    allowCopy: true,
+                    allowEdit: true,
+                    enableAddRow: true,
+                    enableAddCol: true,
+                    data: [{
+                        name: sheetSeleccionado || 'Hoja1',
+                        celldata: datos,
+                        row: Math.max(30, datosSheet.length + 10),
+                        column: Math.max(15, Object.keys(datosSheet[0] || {}).length + 5)
+                    }],
+                    lang: 'es'
+                }
+
+                window.luckysheet.create(options)
+                setLuckysheetIniciado(true)
+                console.log('Luckysheet inicializado correctamente')
+            } catch (error) {
+                console.log('Error al inicializar Luckysheet:', error)
+                setMensajeError('Error al cargar el editor de Excel')
+            }
+        } else {
+            console.log('Luckysheet no está disponible, reintentando en 1 segundo...')
+            setTimeout(() => {
+                inicializarLuckysheet()
+            }, 1000)
         }
     }
 
@@ -321,7 +345,7 @@ export default function GoogleSheetsPage() {
             setMensajeError('')
 
             // Obtener datos del Luckysheet
-            const datosLuckysheet = window.luckysheet.getSheetData()
+            const datosLuckysheet = window.luckysheet.getAllSheets()[0].celldata || []
             
             const resultado = await guardarDatosExcel(
                 spreadsheetSeleccionado, 
@@ -409,6 +433,12 @@ export default function GoogleSheetsPage() {
     const manejarImportar = async () => {
         if (!spreadsheetSeleccionado || !sheetSeleccionado) {
             setMensajeError('Selecciona una hoja de calculo y pestana')
+            return
+        }
+        
+        // Verificar si hay datos antes de importar
+        if (!datosSheet || datosSheet.length === 0) {
+            setMensajeError('No hay datos en la hoja seleccionada para importar. Primero agrega datos o exporta contactos.')
             return
         }
         
@@ -512,30 +542,6 @@ export default function GoogleSheetsPage() {
             minute: '2-digit'
         })
     }
-
-    // Cargar CSS y JS de Luckysheet
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            // Cargar CSS
-            const cssLink = document.createElement('link')
-            cssLink.rel = 'stylesheet'
-            cssLink.href = 'https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/css/luckysheet.css'
-            document.head.appendChild(cssLink)
-
-            // Cargar JS
-            const script = document.createElement('script')
-            script.src = 'https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/js/luckysheet.umd.js'
-            script.onload = () => {
-                console.log('Luckysheet cargado')
-            }
-            document.head.appendChild(script)
-
-            return () => {
-                document.head.removeChild(cssLink)
-                document.head.removeChild(script)
-            }
-        }
-    }, [])
 
     if (loading) {
         return (
@@ -706,7 +712,7 @@ export default function GoogleSheetsPage() {
 
                                     <button 
                                         onClick={manejarImportar}
-                                        disabled={procesando || !sheetSeleccionado}
+                                        disabled={procesando || !sheetSeleccionado || datosSheet.length === 0}
                                         className={`${estilos.button} ${estilos.buttonInfo}`}
                                     >
                                         <ion-icon name="cloud-download-outline"></ion-icon>
@@ -783,7 +789,7 @@ export default function GoogleSheetsPage() {
                                     <div className={estilos.loadingSpinner}></div>
                                     <p>Cargando Excel...</p>
                                 </div>
-                            ) : sheetSeleccionado && datosSheet.length > 0 ? (
+                            ) : sheetSeleccionado && spreadsheetSeleccionado ? (
                                 <div id="luckysheet-container" style={{ width: '100%', height: '600px' }}></div>
                             ) : (
                                 <div className={estilos.emptyExcel}>
