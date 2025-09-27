@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState, useCallback } from 'react'
-import estilos from "./googlesheet.module.css"
+import estilos from "./luckysheet.module.css"
 
 export default function LuckysheetComponent({ 
     datos = [], 
