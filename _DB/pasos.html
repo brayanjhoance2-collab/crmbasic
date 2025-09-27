@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía: Obtener Credenciales para WhatsApp, Instagram, Facebook y Google Sheets</title>
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background: #f8fafc;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            color: white;
+            padding: 3rem 2rem;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="80" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="60" r="1" fill="rgba(255,255,255,0.1)"/></svg>');
+            pointer-events: none;
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin-bottom: 1rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+        }
+        
+        .header p {
+            font-size: clamp(1rem, 3vw, 1.25rem);
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .platforms {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .platform {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .platform:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            border-color: #cbd5e1;
+        }
+        
+        .platform-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid #f1f5f9;
+            position: relative;
+        }
+        
+        .platform-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 28px;
+            color: white;
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+        
+        .whatsapp .platform-icon { 
+            background: linear-gradient(135deg, #25D366, #128C7E);
+        }
+        .instagram .platform-icon { 
+            background: linear-gradient(135deg, #E4405F, #833AB4, #405DE6);
+        }
+        .facebook .platform-icon { 
+            background: linear-gradient(135deg, #1877F2, #0866FF);
+        }
+        .google-sheets .platform-icon { 
+            background: linear-gradient(135deg, #34A853, #137333);
+        }
+        
+        .platform h2 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+            flex: 1;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .steps {
+            list-style: none;
+            counter-reset: step-counter;
+        }
+        
+        .step {
+            counter-increment: step-counter;
+            margin-bottom: 2rem;
+            position: relative;
+            padding-left: 4rem;
+            min-height: 50px;
+        }
+        
+        .step::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        
+        .step h3 {
+            font-size: 1.25rem;
+            color: #0f172a;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        .step p {
+            color: #475569;
+            line-height: 1.7;
+            margin-bottom: 0.75rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .step ul {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+        }
+        
+        .step li {
+            margin: 0.75rem 0;
+            color: #475569;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.6;
+        }
+        
+        .highlight {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.875em;
+            white-space: nowrap;
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .warning {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            color: #dc2626;
+            position: relative;
+            overflow-wrap: break-word;
+        }
+        
+        .warning::before {
+            content: '⚠️';
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            font-size: 1.25rem;
+        }
+        
+        .warning-content {
+            margin-left: 2rem;
+        }
+        
+        .warning strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            color: #166534;
+            position: relative;
+            overflow-wrap: break-word;
+        }
+        
+        .success::before {
+            content: '✅';
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            font-size: 1.25rem;
+        }
+        
+        .success-content {
+            margin-left: 2rem;
+        }
+        
+        .success strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .link {
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s ease;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .link:hover {
+            border-bottom-color: #2563eb;
+            color: #1d4ed8;
+        }
+        
+        .credentials-table {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 2px solid #e2e8f0;
+            overflow: hidden;
+        }
+        
+        .credentials-table h4 {
+            color: #0f172a;
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+        
+        .credential-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .credential-item:last-child {
+            border-bottom: none;
+        }
+        
+        .credential-name {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.975rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .credential-desc {
+            color: #64748b;
+            font-size: 0.875rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 4rem;
+            padding: 3rem 2rem;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .footer h3 {
+            color: #0f172a;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .footer p {
+            color: #64748b;
+            margin-bottom: 0.75rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .platforms {
+                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+                gap: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .platforms {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .platform {
+                padding: 1.5rem;
+            }
+            
+            .platform-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 1rem;
+            }
+            
+            .platform-icon {
+                margin-right: 0;
+                margin-bottom: 0.5rem;
+            }
+            
+            .step {
+                padding-left: 3rem;
+            }
+            
+            .step::before {
+                width: 36px;
+                height: 36px;
+                font-size: 0.875rem;
+            }
+            
+            .credential-item {
+                padding: 0.75rem 0;
+            }
+            
+            .highlight {
+                white-space: normal;
+                word-break: break-all;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header {
+                padding: 2rem 1rem;
+                border-radius: 16px;
+            }
+            
+            .platform {
+                padding: 1rem;
+                border-radius: 16px;
+            }
+            
+            .step {
+                padding-left: 2.5rem;
+            }
+            
+            .step::before {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
+            }
+            
+            .platform-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+            }
+            
+            .warning-content,
+            .success-content {
+                margin-left: 1.5rem;
+            }
+        }
+        
+        /* Utilities */
+        .text-break {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            hyphens: auto;
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .platform {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        .platform:nth-child(1) { animation-delay: 0.1s; }
+        .platform:nth-child(2) { animation-delay: 0.2s; }
+        .platform:nth-child(3) { animation-delay: 0.3s; }
+        .platform:nth-child(4) { animation-delay: 0.4s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <h1>Guía de Configuración API</h1>
+                <p>Obtener credenciales para conectar WhatsApp, Instagram, Facebook y Google Sheets a tu CRM profesional</p>
+            </div>
+        </div>
+        
+        <div class="platforms">
+            <!-- WhatsApp -->
+            <div class="platform whatsapp">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <ion-icon name="logo-whatsapp"></ion-icon>
+                    </div>
+                    <h2 class="text-break">WhatsApp Business API</h2>
+                </div>
+                
+                <ol class="steps">
+                    <li class="step">
+                        <h3 class="text-break">Crear cuenta de Meta Business</h3>
+                        <p>Ve a <a href="https://business.facebook.com" class="link text-break">business.facebook.com</a> y crea tu cuenta de empresa.</p>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Solicitar WhatsApp Business API</h3>
+                        <p>En Meta Business Manager:</p>
+                        <ul>
+                            <li>Ve a "Cuentas" → "WhatsApp Business"</li>
+                            <li>Solicita acceso a la API</li>
+                            <li>Verifica tu empresa (puede tomar días)</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar número de teléfono</h3>
+                        <p>Una vez aprobado:</p>
+                        <ul>
+                            <li>Agrega tu número de teléfono empresarial</li>
+                            <li>Verifica el número con SMS/llamada</li>
+                            <li>Copia el <span class="highlight text-break">Phone Number ID</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Generar Access Token</h3>
+                        <p>En la configuración de WhatsApp:</p>
+                        <ul>
+                            <li>Ve a "Configuración" → "API Setup"</li>
+                            <li>Genera un <span class="highlight text-break">Access Token</span> permanente</li>
+                            <li>Guarda el token de forma segura</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar Webhook</h3>
+                        <p>Para recibir mensajes:</p>
+                        <ul>
+                            <li>URL: <span class="highlight text-break">https://tudominio.com/api/webhook/whatsapp</span></li>
+                            <li>Token de verificación: crea uno personalizado</li>
+                            <li>Suscríbete a "messages"</li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <div class="credentials-table">
+                    <h4>Credenciales necesarias:</h4>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Phone Number ID</div>
+                        <div class="credential-desc text-break">ID del número verificado</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Access Token</div>
+                        <div class="credential-desc text-break">Token permanente de acceso</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Webhook Verify Token</div>
+                        <div class="credential-desc text-break">Token que tú creas</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Business Account ID</div>
+                        <div class="credential-desc text-break">ID de cuenta empresarial (opcional)</div>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-content">
+                        <strong>Importante:</strong>
+                        <span class="text-break">WhatsApp Business API es de pago después del período de prueba. Requiere verificación empresarial que puede tomar varios días.</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Instagram -->
+            <div class="platform instagram">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <ion-icon name="logo-instagram"></ion-icon>
+                    </div>
+                    <h2 class="text-break">Instagram Business</h2>
+                </div>
+                
+                <ol class="steps">
+                    <li class="step">
+                        <h3 class="text-break">Crear App en Facebook Developers</h3>
+                        <p>Ve a <a href="https://developers.facebook.com" class="link text-break">developers.facebook.com</a>:</p>
+                        <ul>
+                            <li>Clic en "Crear App"</li>
+                            <li>Selecciona "Empresa" como tipo</li>
+                            <li>Completa información básica</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Agregar producto Instagram</h3>
+                        <p>En tu app:</p>
+                        <ul>
+                            <li>Ve a "Agregar producto"</li>
+                            <li>Selecciona "Instagram Basic Display"</li>
+                            <li>También agrega "Instagram Graph API"</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar cuenta de Instagram</h3>
+                        <p>Necesitas una cuenta empresarial:</p>
+                        <ul>
+                            <li>Convierte tu Instagram personal a empresarial</li>
+                            <li>Conecta con tu página de Facebook</li>
+                            <li>Copia el <span class="highlight text-break">Instagram Business Account ID</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Generar Access Token</h3>
+                        <p>En Facebook for Developers:</p>
+                        <ul>
+                            <li>Ve a "Herramientas" → "Explorador de Graph API"</li>
+                            <li>Selecciona tu app y página</li>
+                            <li>Genera token con permisos: <span class="highlight text-break">instagram_basic, pages_read_engagement</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar Webhook</h3>
+                        <p>Para mensajes directos:</p>
+                        <ul>
+                            <li>URL: <span class="highlight text-break">https://tudominio.com/api/webhook/instagram</span></li>
+                            <li>Token de verificación personalizado</li>
+                            <li>Suscríbete a "messages"</li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <div class="credentials-table">
+                    <h4>Credenciales necesarias:</h4>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Instagram Business Account ID</div>
+                        <div class="credential-desc text-break">ID de tu cuenta empresarial</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Access Token</div>
+                        <div class="credential-desc text-break">Token con permisos de Instagram</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Webhook Verify Token</div>
+                        <div class="credential-desc text-break">Token que tú creas</div>
+                    </div>
+                </div>
+                
+                <div class="success">
+                    <div class="success-content">
+                        <strong>Ventaja:</strong>
+                        <span class="text-break">Instagram es más fácil de configurar que WhatsApp y es gratuito para uso básico.</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Facebook -->
+            <div class="platform facebook">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <ion-icon name="logo-facebook"></ion-icon>
+                    </div>
+                    <h2 class="text-break">Facebook Messenger</h2>
+                </div>
+                
+                <ol class="steps">
+                    <li class="step">
+                        <h3 class="text-break">Crear App en Facebook Developers</h3>
+                        <p>Ve a <a href="https://developers.facebook.com" class="link text-break">developers.facebook.com</a>:</p>
+                        <ul>
+                            <li>Clic en "Crear App"</li>
+                            <li>Selecciona "Empresa"</li>
+                            <li>Guarda el <span class="highlight text-break">App ID</span> y <span class="highlight text-break">App Secret</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Agregar Messenger</h3>
+                        <p>En tu app:</p>
+                        <ul>
+                            <li>Ve a "Agregar producto"</li>
+                            <li>Selecciona "Messenger"</li>
+                            <li>Configura Messenger</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Crear/Configurar Página</h3>
+                        <p>Necesitas una página de Facebook:</p>
+                        <ul>
+                            <li>Crea página empresarial en <a href="https://facebook.com/pages/create" class="link text-break">facebook.com/pages/create</a></li>
+                            <li>Ve a Configuración → Información de la página</li>
+                            <li>Copia el <span class="highlight text-break">Page ID</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Generar Page Access Token</h3>
+                        <p>En Messenger → Configuración:</p>
+                        <ul>
+                            <li>Selecciona tu página</li>
+                            <li>Genera <span class="highlight text-break">Page Access Token</span></li>
+                            <li>Guarda el token de forma segura</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar Webhook</h3>
+                        <p>En Messenger → Configuración → Webhooks:</p>
+                        <ul>
+                            <li>URL: <span class="highlight text-break">https://tudominio.com/api/webhook/facebook</span></li>
+                            <li>Token de verificación personalizado</li>
+                            <li>Suscríbete a: messages, messaging_postbacks</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Solicitar permisos</h3>
+                        <p>En Revisión de aplicaciones:</p>
+                        <ul>
+                            <li><span class="highlight text-break">pages_messaging</span></li>
+                            <li><span class="highlight text-break">pages_show_list</span></li>
+                            <li><span class="highlight text-break">pages_read_engagement</span></li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <div class="credentials-table">
+                    <h4>Credenciales necesarias:</h4>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Page ID</div>
+                        <div class="credential-desc text-break">ID de tu página de Facebook</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Page Access Token</div>
+                        <div class="credential-desc text-break">Token de acceso de la página</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">App ID</div>
+                        <div class="credential-desc text-break">ID de tu aplicación</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">App Secret</div>
+                        <div class="credential-desc text-break">Clave secreta de la app</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Webhook Verify Token</div>
+                        <div class="credential-desc text-break">Token que tú creas</div>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-content">
+                        <strong>Importante:</strong>
+                        <span class="text-break">Facebook requiere que tu app esté en modo desarrollo inicialmente. Para producción necesitas aprobación de Facebook.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Google Sheets -->
+            <div class="platform google-sheets">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <ion-icon name="grid-outline"></ion-icon>
+                    </div>
+                    <h2 class="text-break">Google Sheets API</h2>
+                </div>
+                
+                <ol class="steps">
+                    <li class="step">
+                        <h3 class="text-break">Crear proyecto en Google Cloud Console</h3>
+                        <p>Ve a <a href="https://console.cloud.google.com" class="link text-break">console.cloud.google.com</a>:</p>
+                        <ul>
+                            <li>Clic en "Crear proyecto" o selecciona uno existente</li>
+                            <li>Nombra tu proyecto (ej: "CRM-Sheets-Integration")</li>
+                            <li>Selecciona organización si aplica</li>
+                            <li>Clic en "Crear"</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Habilitar APIs necesarias</h3>
+                        <p>En el panel de Google Cloud Console:</p>
+                        <ul>
+                            <li>Ve a "APIs y servicios" → "Biblioteca"</li>
+                            <li>Busca y habilita: <span class="highlight text-break">Google Sheets API</span></li>
+                            <li>Busca y habilita: <span class="highlight text-break">Google Drive API</span></li>
+                            <li>Opcionalmente: <span class="highlight text-break">Google Apps Script API</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar pantalla de consentimiento OAuth</h3>
+                        <p>Antes de crear credenciales:</p>
+                        <ul>
+                            <li>Ve a "APIs y servicios" → "Pantalla de consentimiento de OAuth"</li>
+                            <li>Selecciona "Externo" (para cualquier usuario Gmail)</li>
+                            <li>Completa información básica: nombre de app, email de soporte</li>
+                            <li>Agrega dominio autorizado: <span class="highlight text-break">tudominio.com</span></li>
+                            <li>Scopes requeridos se agregarán automáticamente</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Crear credenciales OAuth 2.0</h3>
+                        <p>En "APIs y servicios" → "Credenciales":</p>
+                        <ul>
+                            <li>Clic en "Crear credenciales" → "ID de cliente de OAuth 2.0"</li>
+                            <li>Tipo de aplicación: <span class="highlight text-break">Aplicación web</span></li>
+                            <li>Nombre: "CRM Google Sheets Client"</li>
+                            <li>Orígenes autorizados: <span class="highlight text-break">https://tudominio.com</span></li>
+                            <li>URI de redirección: <span class="highlight text-break">https://tudominio.com/api/auth/google/callback</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Obtener credenciales</h3>
+                        <p>Después de crear el cliente OAuth:</p>
+                        <ul>
+                            <li>Descarga el archivo JSON o copia las credenciales</li>
+                            <li>Anota el <span class="highlight text-break">Client ID</span></li>
+                            <li>Anota el <span class="highlight text-break">Client Secret</span></li>
+                            <li>Confirma la <span class="highlight text-break">Redirect URI</span></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Configurar en tu CRM</h3>
+                        <p>En la sección Google Sheets de tu CRM:</p>
+                        <ul>
+                            <li>Ve a "Configurar API" (solo admins)</li>
+                            <li>Pega el <span class="highlight text-break">Client ID</span></li>
+                            <li>Pega el <span class="highlight text-break">Client Secret</span></li>
+                            <li>Confirma la <span class="highlight text-break">Redirect URI</span></li>
+                            <li>Guarda la configuración</li>
+                        </ul>
+                    </li>
+                    
+                    <li class="step">
+                        <h3 class="text-break">Probar la conexión</h3>
+                        <p>Para verificar que todo funciona:</p>
+                        <ul>
+                            <li>Clic en "Conectar con Google"</li>
+                            <li>Autoriza los permisos solicitados</li>
+                            <li>Verifica que aparezca "Conectado"</li>
+                            <li>Prueba listar tus hojas de cálculo</li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <div class="credentials-table">
+                    <h4>Credenciales necesarias:</h4>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Client ID</div>
+                        <div class="credential-desc text-break">Identificador público del cliente OAuth (ej: 123456789-abc.apps.googleusercontent.com)</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Client Secret</div>
+                        <div class="credential-desc text-break">Clave secreta del cliente OAuth (ej: GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx)</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-name text-break">Redirect URI</div>
+                        <div class="credential-desc text-break">URL de callback autorizada (debe coincidir exactamente)</div>
+                    </div>
+                </div>
+                
+                <div class="success">
+                    <div class="success-content">
+                        <strong>Ventajas 2025:</strong>
+                        <span class="text-break">Google Sheets API es gratuito hasta 100 requests por segundo. Perfecto para sincronizar contactos, generar reportes automáticos y backup de datos.</span>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-content">
+                        <strong>Nuevos requisitos 2025:</strong>
+                        <span class="text-break">Google requiere verificación de dominio para aplicaciones en producción. Asegúrate de tener SSL válido y dominio verificado.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <h3><ion-icon name="shield-checkmark-outline" style="vertical-align: middle; margin-right: 0.5rem;"></ion-icon>Requisitos Generales</h3>
+            <p><strong>Dominio con SSL:</strong> Todas las plataformas requieren HTTPS (certificado SSL válido)</p>
+            <p><strong>Verificación empresarial:</strong> Puede ser requerida para funcionalidades completas</p>
+            <p><strong>Tiempo de aprobación:</strong> WhatsApp puede tomar varios días, Instagram y Facebook usualmente son inmediatos</p>
+            <p><strong>Google Sheets:</strong> Configuración inmediata, pero requiere verificación de dominio para producción</p>
+            <p><strong>Backup de datos:</strong> Google Sheets es ideal para crear respaldos automáticos de tu CRM</p>
+        </div>
+    </div>
+</body>
+</html>

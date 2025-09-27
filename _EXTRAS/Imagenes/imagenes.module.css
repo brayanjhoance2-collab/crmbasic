@@ -1,0 +1,115 @@
+/* imagenes.module.css */
+.contenedor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: inherit;
+}
+
+.contenedorImagen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.contenedorImagen.cargando {
+  opacity: 0;
+}
+
+.imagen {
+  transition: transform 0.3s ease, filter 0.3s ease;
+  will-change: transform;
+}
+
+.imagen:hover {
+  transform: scale(1.05);
+}
+
+/* Esqueleto de carga */
+.esqueleto {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06) 25%,
+    rgba(0, 0, 0, 0.12) 37%,
+    rgba(0, 0, 0, 0.06) 63%
+  );
+  background-size: 400% 100%;
+  animation: esqueleto 1.4s ease infinite;
+}
+
+/* Contenedor de error */
+.contenedorError {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: inherit;
+}
+
+.textoError {
+  color: #666;
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Animación del esqueleto */
+@keyframes esqueleto {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Soporte para imágenes con carga perezosa */
+.contenedor[data-loaded="false"] {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Soporte para diferentes proporciones de aspecto */
+.contenedor[data-aspect-ratio="square"] {
+  aspect-ratio: 1;
+}
+
+.contenedor[data-aspect-ratio="video"] {
+  aspect-ratio: 16/9;
+}
+
+.contenedor[data-aspect-ratio="portrait"] {
+  aspect-ratio: 3/4;
+}
+
+/* Optimizaciones de rendimiento */
+@media (prefers-reduced-motion: reduce) {
+  .imagen,
+  .contenedorImagen {
+    transition: none;
+  }
+}
+
+/* Soporte para imágenes de fondo */
+.imagenFondo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+/* Optimizaciones para dispositivos móviles */
+@media (max-width: 768px) {
+  .imagen:hover {
+    transform: none; /* Desactivar hover en móviles */
+  }
+}

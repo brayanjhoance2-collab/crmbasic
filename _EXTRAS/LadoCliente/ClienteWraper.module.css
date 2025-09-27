@@ -1,0 +1,28 @@
+.headerPlaceholder {
+  height: 140px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .headerPlaceholder {
+    height: 120px;
+  }
+}
+
+@media (max-width: 576px) {
+  .headerPlaceholder {
+    height: 110px;
+  }
+}
+
+@media (max-width: 480px) {
+  .headerPlaceholder {
+    height: 100px;
+  }
+}
+
+@media (max-width: 360px) {
+  .headerPlaceholder {
+    height: 90px;
+  }
+}
