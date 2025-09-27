@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import estilos from "./googlesheet.module.css"
 import { 
     obtenerUsuarioActual,
@@ -18,6 +19,15 @@ import {
     guardarDatosExcel,
     actualizarDatosExcel
 } from "./servidor"
+
+// Importar Luckysheet dinámicamente solo del lado cliente
+const LuckysheetComponent = dynamic(() => import('./LuckysheetWrapper'), {
+    ssr: false,
+    loading: () => <div className={estilos.excelLoading}>
+        <div className={estilos.loadingSpinner}></div>
+        <p>Cargando Excel...</p>
+    </div>
+})
 
 export default function GoogleSheetsPage() {
     const router = useRouter()
@@ -43,7 +53,7 @@ export default function GoogleSheetsPage() {
     const [nombreNuevoSpreadsheet, setNombreNuevoSpreadsheet] = useState('')
     const [descripcionNuevoSpreadsheet, setDescripcionNuevoSpreadsheet] = useState('')
     const [incluirHeaders, setIncluirHeaders] = useState(true)
-    const [luckysheetIniciado, setLuckysheetIniciado] = useState(false)
+    const [excelKey, setExcelKey] = useState(0) // Para forzar re-render del Excel
     
     const [clientId, setClientId] = useState('')
     const [clientSecret, setClientSecret] = useState('')
@@ -83,15 +93,6 @@ export default function GoogleSheetsPage() {
             cargarDatosSheet()
         }
     }, [sheetSeleccionado])
-
-    // Cargar Luckysheet cuando tengamos datos
-    useEffect(() => {
-        if ((datosSheet.length > 0 || (sheetSeleccionado && spreadsheetSeleccionado)) && !luckysheetIniciado) {
-            setTimeout(() => {
-                inicializarLuckysheet()
-            }, 500)
-        }
-    }, [datosSheet, sheetSeleccionado, spreadsheetSeleccionado, luckysheetIniciado])
 
     const verificarYCargarDatos = async () => {
         try {
@@ -216,86 +217,21 @@ export default function GoogleSheetsPage() {
         try {
             setLoadingDatos(true)
             const datos = await obtenerDatosSheet(spreadsheetSeleccionado, sheetSeleccionado)
+            console.log('Datos cargados:', datos.length, 'registros')
             setDatosSheet(datos)
-            setLuckysheetIniciado(false) // Reiniciar para cargar nuevos datos
+            setExcelKey(prev => prev + 1) // Forzar re-render del Excel
         } catch (error) {
             console.log('Error al cargar datos:', error)
             setMensajeError('Error al cargar datos del sheet')
-            setDatosSheet([]) // Inicializar como vacío si hay error
+            setDatosSheet([])
         } finally {
             setLoadingDatos(false)
         }
     }
 
-    const convertirDatosParaLuckysheet = (datos) => {
-        // Si no hay datos, crear una hoja vacía con headers básicos
-        if (!datos || datos.length === 0) {
-            const headersBasicos = ['ID', 'Nombre', 'Apellidos', 'Telefono', 'Email', 'Ciudad', 'Pais']
-            return headersBasicos.map((header, colIndex) => ({
-                r: 0,
-                c: colIndex,
-                v: header
-            }))
-        }
-
-        const headers = Object.keys(datos[0])
-        const filas = [headers]
-
-        datos.forEach(fila => {
-            const valores = headers.map(header => fila[header] || '')
-            filas.push(valores)
-        })
-
-        return filas.map((fila, rowIndex) => 
-            fila.map((valor, colIndex) => ({
-                r: rowIndex,
-                c: colIndex,
-                v: valor
-            }))
-        ).flat()
-    }
-
-    const inicializarLuckysheet = () => {
-        if (typeof window !== 'undefined' && window.luckysheet) {
-            try {
-                // Destruir instancia anterior si existe
-                if (luckysheetIniciado) {
-                    window.luckysheet.destroy()
-                }
-
-                const datos = convertirDatosParaLuckysheet(datosSheet)
-                
-                const options = {
-                    container: 'luckysheet-container',
-                    showtoolbar: true,
-                    showinfobar: true,
-                    showsheetbar: false,
-                    allowCopy: true,
-                    allowEdit: true,
-                    enableAddRow: true,
-                    enableAddCol: true,
-                    data: [{
-                        name: sheetSeleccionado || 'Hoja1',
-                        celldata: datos,
-                        row: Math.max(30, datosSheet.length + 10),
-                        column: Math.max(15, Object.keys(datosSheet[0] || {}).length + 5)
-                    }],
-                    lang: 'es'
-                }
-
-                window.luckysheet.create(options)
-                setLuckysheetIniciado(true)
-                console.log('Luckysheet inicializado correctamente')
-            } catch (error) {
-                console.log('Error al inicializar Luckysheet:', error)
-                setMensajeError('Error al cargar el editor de Excel')
-            }
-        } else {
-            console.log('Luckysheet no está disponible, reintentando en 1 segundo...')
-            setTimeout(() => {
-                inicializarLuckysheet()
-            }, 1000)
-        }
+    const recargarExcel = () => {
+        setExcelKey(prev => prev + 1)
+        setMensajeExito('Excel recargado')
     }
 
     const actualizarExcel = async () => {
@@ -313,15 +249,7 @@ export default function GoogleSheetsPage() {
             if (resultado.success) {
                 setDatosSheet(resultado.datos)
                 setMensajeExito('Excel actualizado desde la nube')
-                
-                // Reinicializar Luckysheet con nuevos datos
-                if (window.luckysheet) {
-                    window.luckysheet.destroy()
-                    setLuckysheetIniciado(false)
-                    setTimeout(() => {
-                        inicializarLuckysheet()
-                    }, 500)
-                }
+                setExcelKey(prev => prev + 1) // Forzar re-render
             } else {
                 setMensajeError(resultado.error || 'Error al actualizar Excel')
             }
@@ -334,8 +262,8 @@ export default function GoogleSheetsPage() {
         }
     }
 
-    const guardarExcel = async () => {
-        if (!spreadsheetSeleccionado || !sheetSeleccionado || !window.luckysheet) {
+    const guardarExcel = async (datosExcel) => {
+        if (!spreadsheetSeleccionado || !sheetSeleccionado) {
             setMensajeError('Selecciona una hoja de calculo y pestana')
             return
         }
@@ -344,13 +272,10 @@ export default function GoogleSheetsPage() {
             setProcesando(true)
             setMensajeError('')
 
-            // Obtener datos del Luckysheet
-            const datosLuckysheet = window.luckysheet.getAllSheets()[0].celldata || []
-            
             const resultado = await guardarDatosExcel(
                 spreadsheetSeleccionado, 
                 sheetSeleccionado,
-                datosLuckysheet
+                datosExcel
             )
             
             if (resultado.success) {
@@ -436,7 +361,6 @@ export default function GoogleSheetsPage() {
             return
         }
         
-        // Verificar si hay datos antes de importar
         if (!datosSheet || datosSheet.length === 0) {
             setMensajeError('No hay datos en la hoja seleccionada para importar. Primero agrega datos o exporta contactos.')
             return
@@ -764,21 +688,21 @@ export default function GoogleSheetsPage() {
                             <h3>Editor de Excel</h3>
                             <div className={estilos.excelActions}>
                                 <button 
+                                    onClick={recargarExcel}
+                                    disabled={!sheetSeleccionado}
+                                    className={`${estilos.button} ${estilos.buttonWarning}`}
+                                >
+                                    <ion-icon name="reload-outline"></ion-icon>
+                                    Recargar Excel
+                                </button>
+                                
+                                <button 
                                     onClick={actualizarExcel}
                                     disabled={loadingDatos || !sheetSeleccionado || procesando}
                                     className={`${estilos.button} ${estilos.buttonInfo}`}
                                 >
                                     <ion-icon name="refresh-outline"></ion-icon>
                                     Actualizar Excel
-                                </button>
-                                
-                                <button 
-                                    onClick={guardarExcel}
-                                    disabled={procesando || !sheetSeleccionado || !luckysheetIniciado}
-                                    className={`${estilos.button} ${estilos.buttonSuccess}`}
-                                >
-                                    <ion-icon name="save-outline"></ion-icon>
-                                    Guardar Excel
                                 </button>
                             </div>
                         </div>
@@ -787,10 +711,27 @@ export default function GoogleSheetsPage() {
                             {loadingDatos ? (
                                 <div className={estilos.excelLoading}>
                                     <div className={estilos.loadingSpinner}></div>
-                                    <p>Cargando Excel...</p>
+                                    <p>Cargando datos del Excel...</p>
                                 </div>
                             ) : sheetSeleccionado && spreadsheetSeleccionado ? (
-                                <div id="luckysheet-container" style={{ width: '100%', height: '600px' }}></div>
+                                <div>
+                                    <div className={estilos.excelInfo}>
+                                        <p>
+                                            <strong>Hoja:</strong> {spreadsheets.find(s => s.id === spreadsheetSeleccionado)?.name || 'N/A'} 
+                                            &nbsp;|&nbsp; 
+                                            <strong>Pestaña:</strong> {sheetSeleccionado}
+                                            &nbsp;|&nbsp;
+                                            <strong>Registros:</strong> {datosSheet.length}
+                                        </p>
+                                    </div>
+                                    <LuckysheetComponent 
+                                        key={excelKey}
+                                        datos={datosSheet}
+                                        sheetName={sheetSeleccionado}
+                                        onSave={guardarExcel}
+                                        procesando={procesando}
+                                    />
+                                </div>
                             ) : (
                                 <div className={estilos.emptyExcel}>
                                     <ion-icon name="document-outline"></ion-icon>
@@ -802,6 +743,7 @@ export default function GoogleSheetsPage() {
                 </div>
             )}
 
+            {/* MODALES - mismos que antes */}
             {mostrarModalConfiguracion && (
                 <div className={estilos.modalOverlay}>
                     <div className={estilos.modalConfig}>

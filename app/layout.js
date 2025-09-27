@@ -2,7 +2,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -18,33 +17,20 @@ export default function RootLayout({ children }) {
     <html lang="es">
       <head>
         <link rel="icon" href="/logo.png" sizes="any" />
-        {/* Luckysheet CSS */}
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/css/luckysheet.css"
-        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable}`}
         data-theme="light"
       >
         {children}
-
-        {/* Ionicons */}
         <Script
           type="module"
           src="https://cdn.jsdelivr.net/npm/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"
           strategy="afterInteractive"
         />
         <Script
-          noModule
+          nomodule
           src="https://cdn.jsdelivr.net/npm/ionicons@7.4.0/dist/ionicons/ionicons.js"
-          strategy="afterInteractive"
-        />
-
-        {/* Luckysheet JS - SIN onLoad para evitar errores de build */}
-        <Script
-          src="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/js/luckysheet.umd.js"
           strategy="afterInteractive"
         />
       </body>
