@@ -20,13 +20,15 @@ import {
     actualizarDatosExcel
 } from "./servidor"
 
-// Importar Luckysheet dinámicamente solo del lado cliente
-const LuckysheetComponent = dynamic(() => import('./LuckysheetWrapper'), {
+// Importar el componente Luckysheet dinámicamente
+const LuckysheetComponent = dynamic(() => import('./luckysheet/luckysheet'), {
     ssr: false,
-    loading: () => <div className={estilos.excelLoading}>
-        <div className={estilos.loadingSpinner}></div>
-        <p>Cargando Excel...</p>
-    </div>
+    loading: () => (
+        <div className={estilos.excelLoading}>
+            <div className={estilos.loadingSpinner}></div>
+            <p>Cargando editor de Excel...</p>
+        </div>
+    )
 })
 
 export default function GoogleSheetsPage() {
@@ -53,7 +55,7 @@ export default function GoogleSheetsPage() {
     const [nombreNuevoSpreadsheet, setNombreNuevoSpreadsheet] = useState('')
     const [descripcionNuevoSpreadsheet, setDescripcionNuevoSpreadsheet] = useState('')
     const [incluirHeaders, setIncluirHeaders] = useState(true)
-    const [excelKey, setExcelKey] = useState(0) // Para forzar re-render del Excel
+    const [excelKey, setExcelKey] = useState(0)
     
     const [clientId, setClientId] = useState('')
     const [clientSecret, setClientSecret] = useState('')
@@ -219,7 +221,7 @@ export default function GoogleSheetsPage() {
             const datos = await obtenerDatosSheet(spreadsheetSeleccionado, sheetSeleccionado)
             console.log('Datos cargados:', datos.length, 'registros')
             setDatosSheet(datos)
-            setExcelKey(prev => prev + 1) // Forzar re-render del Excel
+            setExcelKey(prev => prev + 1)
         } catch (error) {
             console.log('Error al cargar datos:', error)
             setMensajeError('Error al cargar datos del sheet')
@@ -249,7 +251,7 @@ export default function GoogleSheetsPage() {
             if (resultado.success) {
                 setDatosSheet(resultado.datos)
                 setMensajeExito('Excel actualizado desde la nube')
-                setExcelKey(prev => prev + 1) // Forzar re-render
+                setExcelKey(prev => prev + 1)
             } else {
                 setMensajeError(resultado.error || 'Error al actualizar Excel')
             }
@@ -682,7 +684,6 @@ export default function GoogleSheetsPage() {
                         </div>
                     </div>
 
-                    {/* SECCIÓN DEL EXCEL INTEGRADO */}
                     <div className={estilos.excelSection}>
                         <div className={estilos.excelHeader}>
                             <h3>Editor de Excel</h3>
@@ -719,7 +720,7 @@ export default function GoogleSheetsPage() {
                                         <p>
                                             <strong>Hoja:</strong> {spreadsheets.find(s => s.id === spreadsheetSeleccionado)?.name || 'N/A'} 
                                             &nbsp;|&nbsp; 
-                                            <strong>Pestaña:</strong> {sheetSeleccionado}
+                                            <strong>Pestana:</strong> {sheetSeleccionado}
                                             &nbsp;|&nbsp;
                                             <strong>Registros:</strong> {datosSheet.length}
                                         </p>
@@ -735,7 +736,7 @@ export default function GoogleSheetsPage() {
                             ) : (
                                 <div className={estilos.emptyExcel}>
                                     <ion-icon name="document-outline"></ion-icon>
-                                    <p>Selecciona una hoja de cálculo y pestaña para ver el Excel</p>
+                                    <p>Selecciona una hoja de calculo y pestana para ver el Excel</p>
                                 </div>
                             )}
                         </div>
@@ -743,7 +744,6 @@ export default function GoogleSheetsPage() {
                 </div>
             )}
 
-            {/* MODALES - mismos que antes */}
             {mostrarModalConfiguracion && (
                 <div className={estilos.modalOverlay}>
                     <div className={estilos.modalConfig}>

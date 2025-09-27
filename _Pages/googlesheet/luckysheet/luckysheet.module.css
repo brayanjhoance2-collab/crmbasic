@@ -1,0 +1,276 @@
+/* ESTILOS PARA LUCKYSHEET COMPONENT - AGREGAR AL FINAL DE googlesheet.module.css */
+
+.luckysheetWrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.luckysheetControls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.luckysheetInfo {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.luckysheetInfo span {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.luckysheetInfo strong {
+    color: #374151;
+    font-weight: 600;
+}
+
+.luckysheetActions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.luckysheetContainer {
+    position: relative;
+    background: white;
+    min-height: 600px;
+}
+
+.luckysheetPlaceholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f9fafb;
+    color: #6b7280;
+    z-index: 1;
+}
+
+.luckysheetPlaceholder ion-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    color: #cbd5e1;
+}
+
+.luckysheetPlaceholder p {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 500;
+}
+
+.excelError {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: 16px;
+    color: #dc2626;
+    text-align: center;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 32px;
+}
+
+.excelError ion-icon {
+    font-size: 48px;
+    color: #ef4444;
+    margin-bottom: 8px;
+}
+
+.excelError p {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: #dc2626;
+}
+
+.excelError span {
+    font-size: 14px;
+    color: #991b1b;
+    max-width: 400px;
+    line-height: 1.5;
+}
+
+/* Sobrescribir estilos de Luckysheet para mejor integración */
+.luckysheetContainer .luckysheet-wa-editor {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+}
+
+.luckysheetContainer .luckysheet-toolbar {
+    background: #f1f5f9 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    padding: 8px !important;
+}
+
+.luckysheetContainer .luckysheet-toolbar .toolbar-button {
+    color: #475569 !important;
+    border-radius: 4px !important;
+    transition: all 0.2s ease !important;
+}
+
+.luckysheetContainer .luckysheet-toolbar .toolbar-button:hover {
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+}
+
+.luckysheetContainer .luckysheet-sheet-container {
+    background: #ffffff !important;
+}
+
+.luckysheetContainer .luckysheet-cell-selected {
+    border: 2px solid #3b82f6 !important;
+    box-shadow: 0 0 0 1px #3b82f6 !important;
+}
+
+.luckysheetContainer .luckysheet-selection-copy {
+    border: 2px dashed #10b981 !important;
+}
+
+.luckysheetContainer .luckysheet-cell-main {
+    border-color: #f1f5f9 !important;
+}
+
+.luckysheetContainer .luckysheet-cell-main:hover {
+    background: #f8fafc !important;
+}
+
+/* Mejorar la apariencia de la barra de fórmulas */
+.luckysheetContainer .luckysheet-wa-calculate {
+    background: white !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.luckysheetContainer .luckysheet-wa-calculate-item {
+    border-color: #e2e8f0 !important;
+}
+
+/* Estilizar los menús contextuales */
+.luckysheetContainer .luckysheet-menuButton {
+    background: white !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.luckysheetContainer .luckysheet-menuButton .luckysheet-menuButton-item:hover {
+    background: #f8fafc !important;
+    color: #1e293b !important;
+}
+
+/* Responsive para dispositivos móviles */
+@media (max-width: 768px) {
+    .luckysheetControls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    
+    .luckysheetInfo {
+        justify-content: center;
+        gap: 16px;
+    }
+    
+    .luckysheetActions {
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .luckysheetActions .button {
+        flex: 1;
+        max-width: 200px;
+    }
+    
+    .luckysheetContainer {
+        height: 500px !important;
+        min-height: 500px !important;
+    }
+    
+    .excelError {
+        padding: 24px 16px;
+    }
+    
+    .excelError span {
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 640px) {
+    .luckysheetContainer {
+        height: 400px !important;
+        min-height: 400px !important;
+    }
+    
+    .luckysheetInfo {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .luckysheetInfo span {
+        font-size: 13px;
+    }
+}
+
+/* Asegurar que Luckysheet no interfiera con otros estilos */
+.luckysheetContainer .luckysheet-icon {
+    background-image: url('https://cdn.luckysheet.com/luckysheet/0.2.61/assets/iconfont/iconfont.css') !important;
+}
+
+/* Loading específico para Luckysheet */
+.luckysheetWrapper .loadingSpinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f4f6;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Estados de carga y error */
+.luckysheetWrapper[data-loading="true"] {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.luckysheetWrapper[data-error="true"] .luckysheetContainer {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+/* Personalización adicional para mejor UX */
+.luckysheetContainer .luckysheet-scrollbar {
+    background: #f8fafc !important;
+}
+
+.luckysheetContainer .luckysheet-scrollbar:hover {
+    background: #e2e8f0 !important;
+}
+
+.luckysheetContainer .luckysheet-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 4px !important;
+}
+
+.luckysheetContainer .luckysheet-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+}
