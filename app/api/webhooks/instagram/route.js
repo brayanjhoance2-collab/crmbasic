@@ -229,7 +229,7 @@ async function procesarMensajeInstagram(messageData) {
 
         // Ejecutar automatizaciones
         try {
-            const { procesarMensajeParaAutomatizaciones } = await import('../../../automatizacion/servidor')
+            const { procesarMensajeParaAutomatizaciones } = await import('../../../../_Pages/automatizacion/servidor')
             
             const resultadoAuto = await procesarMensajeParaAutomatizaciones(conversacionId, {
                 contenido: contenido,
