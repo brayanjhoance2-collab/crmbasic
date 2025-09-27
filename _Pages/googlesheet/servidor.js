@@ -1465,3 +1465,346 @@ export async function desconectarGoogleSheets() {
         throw error
     }
 }
+
+
+export async function actualizarDatosExcel(spreadsheetId, sheetName) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        console.log('Actualizando datos de Excel desde Google Sheets...')
+        
+        const datos = await obtenerDatosSheet(spreadsheetId, sheetName)
+        
+        await db.execute(`
+            INSERT INTO google_sheets_log (
+                usuario_id,
+                operacion,
+                spreadsheet_id,
+                sheet_name,
+                registros_procesados,
+                estado_operacion
+            ) VALUES (?, 'actualizar_excel', ?, ?, ?, 'exitoso')
+        `, [usuario.id, spreadsheetId, sheetName, datos.length])
+
+        return {
+            success: true,
+            datos: datos,
+            registros: datos.length,
+            message: 'Excel actualizado desde Google Sheets'
+        }
+
+    } catch (error) {
+        console.log('Error al actualizar Excel:', error)
+        
+        const usuario = await obtenerUsuarioActual()
+        if (usuario) {
+            await db.execute(`
+                INSERT INTO google_sheets_log (
+                    usuario_id,
+                    operacion,
+                    estado_operacion,
+                    mensaje_error
+                ) VALUES (?, 'actualizar_excel', 'fallido', ?)
+            `, [usuario.id, error.message])
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
+export async function guardarDatosExcel(spreadsheetId, sheetName, datosLuckysheet) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        console.log('Guardando datos de Excel a Google Sheets...')
+        
+        const auth = await obtenerClienteAutenticado()
+        const sheets = google.sheets({ version: 'v4', auth })
+
+        // Convertir datos de Luckysheet a formato Google Sheets
+        const valores = convertirLuckysheetAGoogle(datosLuckysheet)
+        
+        if (valores.length === 0) {
+            throw new Error('No hay datos para guardar')
+        }
+
+        // Limpiar el sheet antes de escribir
+        await sheets.spreadsheets.values.clear({
+            spreadsheetId: spreadsheetId,
+            range: `${sheetName}!A:Z`
+        })
+
+        // Escribir los nuevos datos
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: spreadsheetId,
+            range: `${sheetName}!A1`,
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+                values: valores
+            }
+        })
+
+        await db.execute(`
+            INSERT INTO google_sheets_log (
+                usuario_id,
+                operacion,
+                spreadsheet_id,
+                sheet_name,
+                registros_procesados,
+                estado_operacion
+            ) VALUES (?, 'guardar_excel', ?, ?, ?, 'exitoso')
+        `, [usuario.id, spreadsheetId, sheetName, valores.length])
+
+        return {
+            success: true,
+            registros: valores.length,
+            message: 'Excel guardado en Google Sheets exitosamente'
+        }
+
+    } catch (error) {
+        console.log('Error al guardar Excel:', error)
+        
+        const usuario = await obtenerUsuarioActual()
+        if (usuario) {
+            await db.execute(`
+                INSERT INTO google_sheets_log (
+                    usuario_id,
+                    operacion,
+                    estado_operacion,
+                    mensaje_error
+                ) VALUES (?, 'guardar_excel', 'fallido', ?)
+            `, [usuario.id, error.message])
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
+// Función auxiliar para convertir datos de Luckysheet a formato Google Sheets
+function convertirLuckysheetAGoogle(datosLuckysheet) {
+    try {
+        if (!datosLuckysheet || !Array.isArray(datosLuckysheet)) {
+            console.log('Datos de Luckysheet inválidos')
+            return []
+        }
+
+        // Encontrar las dimensiones máximas
+        let maxRow = 0
+        let maxCol = 0
+
+        datosLuckysheet.forEach(celda => {
+            if (celda && typeof celda.r === 'number' && typeof celda.c === 'number') {
+                maxRow = Math.max(maxRow, celda.r)
+                maxCol = Math.max(maxCol, celda.c)
+            }
+        })
+
+        // Crear matriz vacía
+        const matriz = []
+        for (let i = 0; i <= maxRow; i++) {
+            matriz[i] = new Array(maxCol + 1).fill('')
+        }
+
+        // Llenar la matriz con los datos
+        datosLuckysheet.forEach(celda => {
+            if (celda && typeof celda.r === 'number' && typeof celda.c === 'number') {
+                const valor = celda.v !== undefined ? String(celda.v) : ''
+                matriz[celda.r][celda.c] = valor
+            }
+        })
+
+        // Filtrar filas vacías del final
+        while (matriz.length > 0 && matriz[matriz.length - 1].every(cell => cell === '')) {
+            matriz.pop()
+        }
+
+        return matriz
+
+    } catch (error) {
+        console.log('Error al convertir datos de Luckysheet:', error)
+        return []
+    }
+}
+
+export async function obtenerEstructuraSheet(spreadsheetId, sheetName) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        const auth = await obtenerClienteAutenticado()
+        const sheets = google.sheets({ version: 'v4', auth })
+
+        // Obtener información del spreadsheet
+        const spreadsheetInfo = await sheets.spreadsheets.get({
+            spreadsheetId: spreadsheetId,
+            fields: 'sheets(properties(title,sheetId,gridProperties))'
+        })
+
+        const sheet = spreadsheetInfo.data.sheets.find(s => s.properties.title === sheetName)
+        
+        if (!sheet) {
+            throw new Error('Pestaña no encontrada')
+        }
+
+        return {
+            success: true,
+            estructura: {
+                sheetId: sheet.properties.sheetId,
+                titulo: sheet.properties.title,
+                filas: sheet.properties.gridProperties.rowCount,
+                columnas: sheet.properties.gridProperties.columnCount
+            }
+        }
+
+    } catch (error) {
+        console.log('Error al obtener estructura del sheet:', error)
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
+export async function exportarExcelCompleto(spreadsheetId, incluirTodasLasPestanas = false) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        const auth = await obtenerClienteAutenticado()
+        const drive = google.drive({ version: 'v3', auth })
+
+        // Exportar como Excel (.xlsx)
+        const response = await drive.files.export({
+            fileId: spreadsheetId,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        })
+
+        await db.execute(`
+            INSERT INTO google_sheets_log (
+                usuario_id,
+                operacion,
+                spreadsheet_id,
+                registros_procesados,
+                estado_operacion
+            ) VALUES (?, 'exportar_excel', ?, 1, 'exitoso')
+        `, [usuario.id, spreadsheetId])
+
+        return {
+            success: true,
+            archivo: response.data,
+            message: 'Excel exportado exitosamente'
+        }
+
+    } catch (error) {
+        console.log('Error al exportar Excel:', error)
+        
+        const usuario = await obtenerUsuarioActual()
+        if (usuario) {
+            await db.execute(`
+                INSERT INTO google_sheets_log (
+                    usuario_id,
+                    operacion,
+                    estado_operacion,
+                    mensaje_error
+                ) VALUES (?, 'exportar_excel', 'fallido', ?)
+            `, [usuario.id, error.message])
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
+export async function duplicarSheet(spreadsheetId, sheetName, nuevoNombre) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        const auth = await obtenerClienteAutenticado()
+        const sheets = google.sheets({ version: 'v4', auth })
+
+        // Obtener información del sheet original
+        const spreadsheet = await sheets.spreadsheets.get({
+            spreadsheetId: spreadsheetId
+        })
+
+        const sheetOriginal = spreadsheet.data.sheets.find(s => s.properties.title === sheetName)
+        
+        if (!sheetOriginal) {
+            throw new Error('Pestaña original no encontrada')
+        }
+
+        // Duplicar el sheet
+        const response = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: spreadsheetId,
+            resource: {
+                requests: [{
+                    duplicateSheet: {
+                        sourceSheetId: sheetOriginal.properties.sheetId,
+                        newSheetName: nuevoNombre
+                    }
+                }]
+            }
+        })
+
+        const nuevoSheet = response.data.replies[0].duplicateSheet
+
+        await db.execute(`
+            INSERT INTO google_sheets_log (
+                usuario_id,
+                operacion,
+                spreadsheet_id,
+                sheet_name,
+                registros_procesados,
+                estado_operacion
+            ) VALUES (?, 'duplicar_sheet', ?, ?, 0, 'exitoso')
+        `, [usuario.id, spreadsheetId, nuevoNombre])
+
+        return {
+            success: true,
+            sheetId: nuevoSheet.properties.sheetId,
+            nombreNuevo: nuevoNombre,
+            message: 'Pestaña duplicada exitosamente'
+        }
+
+    } catch (error) {
+        console.log('Error al duplicar sheet:', error)
+        
+        const usuario = await obtenerUsuarioActual()
+        if (usuario) {
+            await db.execute(`
+                INSERT INTO google_sheets_log (
+                    usuario_id,
+                    operacion,
+                    estado_operacion,
+                    mensaje_error
+                ) VALUES (?, 'duplicar_sheet', 'fallido', ?)
+            `, [usuario.id, error.message])
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}

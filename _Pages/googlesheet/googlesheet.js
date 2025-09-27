@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import estilos from "./googlesheet.module.css"
 import { 
@@ -14,11 +14,14 @@ import {
     sincronizarDatos,
     crearNuevoSheet,
     eliminarSheet,
-    crearSpreadsheetCompleto
+    crearSpreadsheetCompleto,
+    guardarDatosExcel,
+    actualizarDatosExcel
 } from "./servidor"
 
 export default function GoogleSheetsPage() {
     const router = useRouter()
+    const luckysheetRef = useRef(null)
     const [usuario, setUsuario] = useState(null)
     const [loading, setLoading] = useState(true)
     const [configuracion, setConfiguracion] = useState(null)
@@ -41,6 +44,7 @@ export default function GoogleSheetsPage() {
     const [nombreNuevoSpreadsheet, setNombreNuevoSpreadsheet] = useState('')
     const [descripcionNuevoSpreadsheet, setDescripcionNuevoSpreadsheet] = useState('')
     const [incluirHeaders, setIncluirHeaders] = useState(true)
+    const [luckysheetIniciado, setLuckysheetIniciado] = useState(false)
     
     const [clientId, setClientId] = useState('')
     const [clientSecret, setClientSecret] = useState('')
@@ -80,6 +84,13 @@ export default function GoogleSheetsPage() {
             cargarDatosSheet()
         }
     }, [sheetSeleccionado])
+
+    // Cargar Luckysheet cuando tengamos datos
+    useEffect(() => {
+        if (datosSheet.length > 0 && !luckysheetIniciado) {
+            inicializarLuckysheet()
+        }
+    }, [datosSheet, luckysheetIniciado])
 
     const verificarYCargarDatos = async () => {
         try {
@@ -205,11 +216,130 @@ export default function GoogleSheetsPage() {
             setLoadingDatos(true)
             const datos = await obtenerDatosSheet(spreadsheetSeleccionado, sheetSeleccionado)
             setDatosSheet(datos)
+            setLuckysheetIniciado(false) // Reiniciar para cargar nuevos datos
         } catch (error) {
             console.log('Error al cargar datos:', error)
             setMensajeError('Error al cargar datos del sheet')
         } finally {
             setLoadingDatos(false)
+        }
+    }
+
+    const convertirDatosParaLuckysheet = (datos) => {
+        if (!datos || datos.length === 0) {
+            return []
+        }
+
+        const headers = Object.keys(datos[0])
+        const filas = [headers]
+
+        datos.forEach(fila => {
+            const valores = headers.map(header => fila[header] || '')
+            filas.push(valores)
+        })
+
+        return filas.map((fila, rowIndex) => 
+            fila.map((valor, colIndex) => ({
+                r: rowIndex,
+                c: colIndex,
+                v: valor
+            }))
+        ).flat()
+    }
+
+    const inicializarLuckysheet = () => {
+        if (typeof window !== 'undefined' && window.luckysheet && datosSheet.length > 0) {
+            const datos = convertirDatosParaLuckysheet(datosSheet)
+            
+            const options = {
+                container: 'luckysheet-container',
+                showtoolbar: true,
+                showinfobar: true,
+                showsheetbar: true,
+                allowCopy: true,
+                allowEdit: true,
+                enableAddRow: true,
+                enableAddCol: true,
+                data: [{
+                    name: sheetSeleccionado || 'Sheet1',
+                    celldata: datos,
+                    row: Math.max(50, datosSheet.length + 10),
+                    column: Math.max(26, Object.keys(datosSheet[0] || {}).length + 5)
+                }],
+                lang: 'es'
+            }
+
+            window.luckysheet.create(options)
+            setLuckysheetIniciado(true)
+        }
+    }
+
+    const actualizarExcel = async () => {
+        if (!spreadsheetSeleccionado || !sheetSeleccionado) {
+            setMensajeError('Selecciona una hoja de calculo y pestana')
+            return
+        }
+
+        try {
+            setProcesando(true)
+            setMensajeError('')
+
+            const resultado = await actualizarDatosExcel(spreadsheetSeleccionado, sheetSeleccionado)
+            
+            if (resultado.success) {
+                setDatosSheet(resultado.datos)
+                setMensajeExito('Excel actualizado desde la nube')
+                
+                // Reinicializar Luckysheet con nuevos datos
+                if (window.luckysheet) {
+                    window.luckysheet.destroy()
+                    setLuckysheetIniciado(false)
+                    setTimeout(() => {
+                        inicializarLuckysheet()
+                    }, 500)
+                }
+            } else {
+                setMensajeError(resultado.error || 'Error al actualizar Excel')
+            }
+
+        } catch (error) {
+            console.log('Error al actualizar Excel:', error)
+            setMensajeError('Error al actualizar Excel')
+        } finally {
+            setProcesando(false)
+        }
+    }
+
+    const guardarExcel = async () => {
+        if (!spreadsheetSeleccionado || !sheetSeleccionado || !window.luckysheet) {
+            setMensajeError('Selecciona una hoja de calculo y pestana')
+            return
+        }
+
+        try {
+            setProcesando(true)
+            setMensajeError('')
+
+            // Obtener datos del Luckysheet
+            const datosLuckysheet = window.luckysheet.getSheetData()
+            
+            const resultado = await guardarDatosExcel(
+                spreadsheetSeleccionado, 
+                sheetSeleccionado,
+                datosLuckysheet
+            )
+            
+            if (resultado.success) {
+                setMensajeExito('Excel guardado en la nube exitosamente')
+            } else {
+                setMensajeError(resultado.error || 'Error al guardar Excel')
+            }
+
+        } catch (error) {
+            console.log('Error al guardar Excel:', error)
+            setMensajeError('Error al guardar Excel')
+        } finally {
+            setProcesando(false)
         }
     }
 
@@ -305,33 +435,6 @@ export default function GoogleSheetsPage() {
         }
     }
 
-    const manejarSincronizar = async () => {
-        if (!spreadsheetSeleccionado || !sheetSeleccionado) {
-            setMensajeError('Selecciona una hoja de calculo y pestana')
-            return
-        }
-        
-        try {
-            setProcesando(true)
-            setMensajeError('')
-            
-            const resultado = await sincronizarDatos(spreadsheetSeleccionado, sheetSeleccionado)
-            
-            if (resultado.success) {
-                setMensajeExito('Datos sincronizados exitosamente')
-                await cargarDatosSheet()
-            } else {
-                setMensajeError(resultado.error || 'Error al sincronizar')
-            }
-            
-        } catch (error) {
-            console.log('Error al sincronizar:', error)
-            setMensajeError('Error al sincronizar datos')
-        } finally {
-            setProcesando(false)
-        }
-    }
-
     const manejarCrearNuevoSheet = async () => {
         if (!nombreNuevoSheet.trim() || !spreadsheetSeleccionado) {
             setMensajeError('Ingresa un nombre para la nueva pestana')
@@ -409,6 +512,30 @@ export default function GoogleSheetsPage() {
             minute: '2-digit'
         })
     }
+
+    // Cargar CSS y JS de Luckysheet
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            // Cargar CSS
+            const cssLink = document.createElement('link')
+            cssLink.rel = 'stylesheet'
+            cssLink.href = 'https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/css/luckysheet.css'
+            document.head.appendChild(cssLink)
+
+            // Cargar JS
+            const script = document.createElement('script')
+            script.src = 'https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/assets/js/luckysheet.umd.js'
+            script.onload = () => {
+                console.log('Luckysheet cargado')
+            }
+            document.head.appendChild(script)
+
+            return () => {
+                document.head.removeChild(cssLink)
+                document.head.removeChild(script)
+            }
+        }
+    }, [])
 
     if (loading) {
         return (
@@ -585,15 +712,6 @@ export default function GoogleSheetsPage() {
                                         <ion-icon name="cloud-download-outline"></ion-icon>
                                         Importar contactos
                                     </button>
-
-                                    <button 
-                                        onClick={manejarSincronizar}
-                                        disabled={procesando || !sheetSeleccionado}
-                                        className={`${estilos.button} ${estilos.buttonWarning}`}
-                                    >
-                                        <ion-icon name="sync-outline"></ion-icon>
-                                        Sincronizar
-                                    </button>
                                 </div>
 
                                 <div className={estilos.optionsContainer}>
@@ -634,56 +752,43 @@ export default function GoogleSheetsPage() {
                         </div>
                     </div>
 
-                    <div className={estilos.dataSection}>
-                        <div className={estilos.dataHeader}>
-                            <h3>Vista previa de datos</h3>
-                            <button 
-                                onClick={cargarDatosSheet}
-                                disabled={loadingDatos || !sheetSeleccionado}
-                                className={`${estilos.button} ${estilos.buttonSecondary}`}
-                            >
-                                <ion-icon name="refresh-outline"></ion-icon>
-                                Actualizar
-                            </button>
+                    {/* SECCIÓN DEL EXCEL INTEGRADO */}
+                    <div className={estilos.excelSection}>
+                        <div className={estilos.excelHeader}>
+                            <h3>Editor de Excel</h3>
+                            <div className={estilos.excelActions}>
+                                <button 
+                                    onClick={actualizarExcel}
+                                    disabled={loadingDatos || !sheetSeleccionado || procesando}
+                                    className={`${estilos.button} ${estilos.buttonInfo}`}
+                                >
+                                    <ion-icon name="refresh-outline"></ion-icon>
+                                    Actualizar Excel
+                                </button>
+                                
+                                <button 
+                                    onClick={guardarExcel}
+                                    disabled={procesando || !sheetSeleccionado || !luckysheetIniciado}
+                                    className={`${estilos.button} ${estilos.buttonSuccess}`}
+                                >
+                                    <ion-icon name="save-outline"></ion-icon>
+                                    Guardar Excel
+                                </button>
+                            </div>
                         </div>
 
-                        <div className={estilos.dataContainer}>
+                        <div className={estilos.excelContainer}>
                             {loadingDatos ? (
-                                <div className={estilos.dataLoading}>
+                                <div className={estilos.excelLoading}>
                                     <div className={estilos.loadingSpinner}></div>
-                                    <p>Cargando datos...</p>
+                                    <p>Cargando Excel...</p>
                                 </div>
-                            ) : datosSheet.length > 0 ? (
-                                <div className={estilos.tableContainer}>
-                                    <table className={estilos.dataTable}>
-                                        <thead>
-                                            <tr>
-                                                {datosSheet[0] && Object.keys(datosSheet[0]).map(key => (
-                                                    <th key={key}>{key}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {datosSheet.slice(0, 10).map((fila, index) => (
-                                                <tr key={index}>
-                                                    {Object.values(fila).map((valor, i) => (
-                                                        <td key={i}>{valor || ''}</td>
-                                                    ))}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {datosSheet.length > 10 && (
-                                        <div className={estilos.dataInfo}>
-                                            Mostrando 10 de {datosSheet.length} registros
-                                        </div>
-                                    )}
-                                </div>
+                            ) : sheetSeleccionado && datosSheet.length > 0 ? (
+                                <div id="luckysheet-container" style={{ width: '100%', height: '600px' }}></div>
                             ) : (
-                                <div className={estilos.emptyData}>
+                                <div className={estilos.emptyExcel}>
                                     <ion-icon name="document-outline"></ion-icon>
-                                    <p>No hay datos para mostrar</p>
-                                    <span>Selecciona una hoja de calculo y pestana para ver los datos</span>
+                                    <p>Selecciona una hoja de cálculo y pestaña para ver el Excel</p>
                                 </div>
                             )}
                         </div>
