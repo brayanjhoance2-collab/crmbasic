@@ -57,6 +57,64 @@ export async function obtenerUsuarioActual() {
     }
 }
 
+export async function verificarEstadoWhatsApp() {
+    try {
+        const [configRows] = await db.execute(`
+            SELECT ca.*, 
+                   cw.phone_number_id, cw.access_token,
+                   cb.session_id, cb.estado_conexion
+            FROM configuraciones_activas ca
+            LEFT JOIN configuraciones_whatsapp cw ON ca.config_id = cw.id AND ca.tipo_config = 'api'
+            LEFT JOIN configuraciones_baileys cb ON ca.config_id = cb.id AND ca.tipo_config = 'baileys'
+            WHERE ca.plataforma = 'whatsapp'
+            LIMIT 1
+        `)
+
+        if (configRows.length === 0) {
+            return {
+                configurado: false,
+                activo: false,
+                tipo: null,
+                mensaje: 'No hay configuración de WhatsApp'
+            }
+        }
+
+        const config = configRows[0]
+        
+        if (config.tipo_config === 'api' && config.phone_number_id && config.access_token) {
+            return {
+                configurado: true,
+                activo: true,
+                tipo: 'api',
+                mensaje: 'WhatsApp API configurado y activo'
+            }
+        } else if (config.tipo_config === 'baileys' && config.session_id && config.estado_conexion === 'conectado') {
+            return {
+                configurado: true,
+                activo: true,
+                tipo: 'baileys',
+                mensaje: 'WhatsApp Baileys conectado y activo'
+            }
+        } else {
+            return {
+                configurado: true,
+                activo: false,
+                tipo: config.tipo_config,
+                mensaje: 'WhatsApp configurado pero no activo'
+            }
+        }
+
+    } catch (error) {
+        console.log('Error al verificar estado WhatsApp:', error)
+        return {
+            configurado: false,
+            activo: false,
+            tipo: null,
+            mensaje: 'Error al verificar estado'
+        }
+    }
+}
+
 export async function obtenerAsignacionesUsuario(spreadsheetId, sheetName) {
     try {
         const usuario = await obtenerUsuarioActual()
@@ -232,6 +290,96 @@ export async function eliminarAsignacion(id) {
     }
 }
 
+export async function obtenerContactosSheet(asignacionId, spreadsheetId, sheetName) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        const [asignacionRows] = await db.execute(`
+            SELECT * FROM google_sheets_asignaciones 
+            WHERE id = ? AND usuario_id = ?
+        `, [asignacionId, usuario.id])
+
+        if (asignacionRows.length === 0) {
+            throw new Error('Asignación no encontrada')
+        }
+
+        const [contactosRows] = await db.execute(`
+            SELECT 
+                gsce.*,
+                geh.fecha_enviado as fecha_ultimo_envio,
+                CASE WHEN geh.id IS NOT NULL THEN 1 ELSE 0 END as mensaje_enviado
+            FROM google_sheets_contactos_exclusiones gsce
+            LEFT JOIN google_sheets_envios_historial geh ON gsce.numero_telefono = geh.numero_telefono 
+                AND geh.asignacion_id = ? AND geh.estado_envio = 'enviado'
+            WHERE gsce.asignacion_id = ?
+            ORDER BY gsce.fila_numero ASC
+        `, [asignacionId, asignacionId])
+
+        return contactosRows
+
+    } catch (error) {
+        console.log('Error al obtener contactos del sheet:', error)
+        throw error
+    }
+}
+
+export async function excluirContactoDeEnvios(asignacionId, contactoId) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        await db.execute(`
+            UPDATE google_sheets_contactos_exclusiones 
+            SET excluido = 1, fecha_exclusion = NOW(), excluido_por = ?
+            WHERE id = ? AND asignacion_id = ?
+        `, [usuario.id, contactoId, asignacionId])
+
+        return {
+            success: true,
+            message: 'Contacto excluido exitosamente'
+        }
+
+    } catch (error) {
+        console.log('Error al excluir contacto:', error)
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
+export async function incluirContactoEnEnvios(asignacionId, contactoId) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        await db.execute(`
+            UPDATE google_sheets_contactos_exclusiones 
+            SET excluido = 0, fecha_exclusion = NULL, excluido_por = NULL
+            WHERE id = ? AND asignacion_id = ?
+        `, [contactoId, asignacionId])
+
+        return {
+            success: true,
+            message: 'Contacto incluido exitosamente'
+        }
+
+    } catch (error) {
+        console.log('Error al incluir contacto:', error)
+        return {
+            success: false,
+            error: error.message
+        }
+    }
+}
+
 export async function obtenerHistorialEnvios(asignacionId) {
     try {
         const usuario = await obtenerUsuarioActual()
@@ -341,7 +489,6 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 continue
             }
 
-            // Verificar restricción
             if (valorRestriccion && asignacion.valor_restriccion && 
                 valorRestriccion.toString().toLowerCase().includes(asignacion.valor_restriccion.toLowerCase())) {
                 omitidos++
@@ -354,7 +501,18 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 continue
             }
 
-            // Verificar si ya se envió mensaje a este número (solo si enviar_solo_nuevos está activado)
+            await crearOActualizarContactoExclusion(asignacionId, telefonoLimpio, nombre, index + 1)
+
+            const [exclusionRows] = await db.execute(`
+                SELECT excluido FROM google_sheets_contactos_exclusiones 
+                WHERE asignacion_id = ? AND numero_telefono = ?
+            `, [asignacionId, telefonoLimpio])
+
+            if (exclusionRows.length > 0 && exclusionRows[0].excluido) {
+                omitidos++
+                continue
+            }
+
             if (asignacion.enviar_solo_nuevos) {
                 const [existeEnvio] = await db.execute(`
                     SELECT id FROM google_sheets_envios_historial 
@@ -364,15 +522,14 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 if (existeEnvio.length > 0) {
                     omitidos++
                     continue
-                }}
+                }
+            }
 
-            // Personalizar mensaje
             const mensajePersonalizado = asignacion.mensaje_bienvenida
                 .replace(/{nombre}/g, nombre || 'Usuario')
                 .replace(/{telefono}/g, telefonoLimpio)
 
             try {
-                // Registrar en historial antes del envío
                 const [historialResult] = await db.execute(`
                     INSERT INTO google_sheets_envios_historial (
                         asignacion_id,
@@ -398,11 +555,9 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                     index + 1
                 ])
 
-                // Enviar mensaje por WhatsApp
                 const resultadoEnvio = await enviarMensajeWhatsApp(telefonoLimpio, mensajePersonalizado)
 
                 if (resultadoEnvio.success) {
-                    // Actualizar historial como enviado
                     await db.execute(`
                         UPDATE google_sheets_envios_historial 
                         SET estado_envio = 'enviado',
@@ -413,7 +568,6 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
 
                     enviados++
                 } else {
-                    // Actualizar historial como fallido
                     await db.execute(`
                         UPDATE google_sheets_envios_historial 
                         SET estado_envio = 'fallido',
@@ -429,7 +583,6 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 omitidos++
             }
 
-            // Pequeña pausa entre envíos para no saturar la API
             await new Promise(resolve => setTimeout(resolve, 1000))
         }
 
@@ -449,6 +602,36 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
     }
 }
 
+async function crearOActualizarContactoExclusion(asignacionId, telefono, nombre, filaNumero) {
+    try {
+        const [existente] = await db.execute(`
+            SELECT id FROM google_sheets_contactos_exclusiones 
+            WHERE asignacion_id = ? AND numero_telefono = ?
+        `, [asignacionId, telefono])
+
+        if (existente.length === 0) {
+            await db.execute(`
+                INSERT INTO google_sheets_contactos_exclusiones (
+                    asignacion_id,
+                    numero_telefono,
+                    nombre,
+                    fila_numero,
+                    excluido,
+                    fecha_creacion
+                ) VALUES (?, ?, ?, ?, 0, NOW())
+            `, [asignacionId, telefono, nombre, filaNumero])
+        } else {
+            await db.execute(`
+                UPDATE google_sheets_contactos_exclusiones 
+                SET nombre = ?, fila_numero = ?
+                WHERE id = ?
+            `, [nombre, filaNumero, existente[0].id])
+        }
+    } catch (error) {
+        console.log('Error al crear/actualizar contacto exclusión:', error)
+    }
+}
+
 export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionId) {
     try {
         const usuario = await obtenerUsuarioActual()
@@ -461,7 +644,6 @@ export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionI
             throw new Error('Número de teléfono no válido')
         }
 
-        // Registrar en historial
         const [historialResult] = await db.execute(`
             INSERT INTO google_sheets_envios_historial (
                 asignacion_id,
@@ -484,7 +666,6 @@ export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionI
             mensaje
         ])
 
-        // Enviar mensaje
         const resultadoEnvio = await enviarMensajeWhatsApp(telefonoLimpio, mensaje)
 
         if (resultadoEnvio.success) {
@@ -524,10 +705,8 @@ export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionI
     }
 }
 
-// Función para enviar mensaje por WhatsApp usando la configuración activa
 async function enviarMensajeWhatsApp(telefono, mensaje) {
     try {
-        // Verificar configuración activa de WhatsApp
         const [configRows] = await db.execute(`
             SELECT ca.*, 
                    cw.phone_number_id, cw.access_token,
@@ -607,15 +786,72 @@ async function enviarConWhatsAppAPI(telefono, mensaje, config) {
 
 async function enviarConBaileys(telefono, mensaje, config) {
     try {
-        // Aquí iría la integración con Baileys
-        // Por ahora simularemos el envío
-        console.log('Enviando con Baileys:', { telefono, mensaje, sessionId: config.session_id })
+        const { enviarMensajeBaileys } = await import('../../configuracionredes/servidor')
         
-        // Simulación de envío exitoso
-        return {
-            success: true,
-            messageId: `baileys_${Date.now()}`,
-            provider: 'baileys'
+        const [conversacionRows] = await db.execute(`
+            SELECT conv.id 
+            FROM conversaciones conv
+            INNER JOIN contactos c ON conv.contacto_id = c.id
+            WHERE c.whatsapp_id LIKE ? AND conv.plataforma = 'whatsapp'
+            ORDER BY conv.fecha_ultima_actividad DESC
+            LIMIT 1
+        `, [`%${telefono}@%`])
+
+        let conversacionId = null
+        
+        if (conversacionRows.length === 0) {
+            let [contactoRows] = await db.execute(`
+                SELECT id FROM contactos WHERE telefono = ? OR whatsapp_id LIKE ?
+            `, [telefono, `%${telefono}@%`])
+
+            let contactoId
+            if (contactoRows.length === 0) {
+                const [resultado] = await db.execute(`
+                    INSERT INTO contactos (
+                        telefono,
+                        whatsapp_id,
+                        nombre,
+                        origen,
+                        estado,
+                        primera_interaccion,
+                        fecha_creacion
+                    ) VALUES (?, ?, 'Contacto Sheet', 'google_sheets', 'nuevo', NOW(), NOW())
+                `, [telefono, `${telefono}@s.whatsapp.net`])
+                
+                contactoId = resultado.insertId
+            } else {
+                contactoId = contactoRows[0].id
+            }
+
+            const [convResult] = await db.execute(`
+                INSERT INTO conversaciones (
+                    contacto_id,
+                    plataforma,
+                    whatsapp_tipo,
+                    estado,
+                    fecha_inicio,
+                    fecha_ultima_actividad
+                ) VALUES (?, 'whatsapp', 'baileys', 'abierta', NOW(), NOW())
+            `, [contactoId])
+            
+            conversacionId = convResult.insertId
+        } else {
+            conversacionId = conversacionRows[0].id
+        }
+
+        const resultado = await enviarMensajeBaileys(conversacionId, mensaje)
+        
+        if (resultado.success) {
+            return {
+                success: true,
+                messageId: resultado.messageId || `baileys_${Date.now()}`,
+                provider: 'baileys'
+            }
+        } else {
+            return {
+                success: false,
+                error: resultado.error || 'Error con Baileys'
+            }
         }
 
     } catch (error) {
@@ -627,24 +863,19 @@ async function enviarConBaileys(telefono, mensaje, config) {
     }
 }
 
-// Funciones auxiliares
 function limpiarTelefono(telefono) {
     if (!telefono) return ''
     
-    // Remover espacios, guiones, paréntesis
     let limpio = telefono.toString().replace(/[\s\-\(\)\+]/g, '')
     
-    // Si empieza con 52 (México), mantenerlo
     if (limpio.startsWith('52') && limpio.length === 12) {
         return limpio
     }
     
-    // Si es número local mexicano (10 dígitos), agregar 52
     if (limpio.length === 10) {
         return '52' + limpio
     }
     
-    // Si tiene 11 dígitos y empieza con 1, puede ser de México
     if (limpio.length === 11 && limpio.startsWith('1')) {
         return '52' + limpio.substring(1)
     }
@@ -655,10 +886,8 @@ function limpiarTelefono(telefono) {
 function validarTelefono(telefono) {
     if (!telefono) return false
     
-    // Debe tener entre 10 y 15 dígitos
     if (telefono.length < 10 || telefono.length > 15) return false
     
-    // Solo números
     if (!/^\d+$/.test(telefono)) return false
     
     return true

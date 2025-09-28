@@ -11,7 +11,11 @@ import {
     obtenerHistorialEnvios,
     procesarEnviosSheet,
     enviarMensajeManual,
-    obtenerEstadisticasEnvios
+    obtenerEstadisticasEnvios,
+    obtenerContactosSheet,
+    excluirContactoDeEnvios,
+    incluirContactoEnEnvios,
+    verificarEstadoWhatsApp
 } from "./servidor"
 
 export default function AsignacionComponent({ 
@@ -25,10 +29,13 @@ export default function AsignacionComponent({
     const [asignaciones, setAsignaciones] = useState([])
     const [historialEnvios, setHistorialEnvios] = useState([])
     const [estadisticas, setEstadisticas] = useState(null)
+    const [contactosSheet, setContactosSheet] = useState([])
+    const [estadoWhatsApp, setEstadoWhatsApp] = useState(null)
     const [columnasDisponibles, setColumnasDisponibles] = useState([])
     
     // Estados de modales
     const [modalAsignacion, setModalAsignacion] = useState(false)
+    const [modalGestionContactos, setModalGestionContactos] = useState(false)
     const [tipoModal, setTipoModal] = useState('')
     const [asignacionSeleccionada, setAsignacionSeleccionada] = useState(null)
     
@@ -53,6 +60,8 @@ export default function AsignacionComponent({
     const [mensajeError, setMensajeError] = useState('')
     const [mensajeExito, setMensajeExito] = useState('')
     const [seccionActiva, setSeccionActiva] = useState('asignaciones')
+    const [filtroContactos, setFiltroContactos] = useState('todos')
+    const [busquedaContactos, setBusquedaContactos] = useState('')
 
     useEffect(() => {
         verificarYCargarDatos()
@@ -62,8 +71,13 @@ export default function AsignacionComponent({
         if (spreadsheetSeleccionado && sheetSeleccionado && datosSheet.length > 0) {
             cargarColumnasDisponibles()
             cargarDatosAsignaciones()
+            cargarContactosSheet()
         }
     }, [spreadsheetSeleccionado, sheetSeleccionado, datosSheet])
+
+    useEffect(() => {
+        verificarEstadoWhatsAppActivo()
+    }, [])
 
     const verificarYCargarDatos = async () => {
         try {
@@ -82,6 +96,16 @@ export default function AsignacionComponent({
             router.push('/login')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const verificarEstadoWhatsAppActivo = async () => {
+        try {
+            const estado = await verificarEstadoWhatsApp()
+            setEstadoWhatsApp(estado)
+        } catch (error) {
+            console.log('Error al verificar estado WhatsApp:', error)
+            setEstadoWhatsApp({ configurado: false, activo: false })
         }
     }
 
@@ -118,6 +142,21 @@ export default function AsignacionComponent({
         }
     }
 
+    const cargarContactosSheet = async () => {
+        if (!spreadsheetSeleccionado || !sheetSeleccionado || asignaciones.length === 0) return
+        
+        try {
+            const contactosData = await obtenerContactosSheet(
+                asignaciones[0].id,
+                spreadsheetSeleccionado,
+                sheetSeleccionado
+            )
+            setContactosSheet(contactosData)
+        } catch (error) {
+            console.log('Error al cargar contactos del sheet:', error)
+        }
+    }
+
     const abrirModalAsignacion = (tipo, asignacion = null) => {
         setTipoModal(tipo)
         setAsignacionSeleccionada(asignacion)
@@ -147,8 +186,14 @@ export default function AsignacionComponent({
         setModalAsignacion(true)
     }
 
+    const abrirModalGestionContactos = () => {
+        setModalGestionContactos(true)
+        cargarContactosSheet()
+    }
+
     const cerrarModales = () => {
         setModalAsignacion(false)
+        setModalGestionContactos(false)
         setTipoModal('')
         setAsignacionSeleccionada(null)
         setMensajeError('')
@@ -220,9 +265,50 @@ export default function AsignacionComponent({
         }
     }
 
+    const manejarExcluirContacto = async (contactoId, telefono) => {
+        if (!window.confirm(`¿Excluir del envío automático a ${telefono}?`)) return
+        
+        try {
+            const resultado = await excluirContactoDeEnvios(asignaciones[0].id, contactoId)
+            
+            if (resultado.success) {
+                setMensajeExito('Contacto excluido de envíos automáticos')
+                await cargarContactosSheet()
+            } else {
+                setMensajeError(resultado.error || 'Error al excluir contacto')
+            }
+        } catch (error) {
+            console.log('Error al excluir contacto:', error)
+            setMensajeError('Error al excluir contacto')
+        }
+    }
+
+    const manejarIncluirContacto = async (contactoId, telefono) => {
+        if (!window.confirm(`¿Incluir en envío automático a ${telefono}?`)) return
+        
+        try {
+            const resultado = await incluirContactoEnEnvios(asignaciones[0].id, contactoId)
+            
+            if (resultado.success) {
+                setMensajeExito('Contacto incluido en envíos automáticos')
+                await cargarContactosSheet()
+            } else {
+                setMensajeError(resultado.error || 'Error al incluir contacto')
+            }
+        } catch (error) {
+            console.log('Error al incluir contacto:', error)
+            setMensajeError('Error al incluir contacto')
+        }
+    }
+
     const manejarProcesarEnvios = async (asignacionId) => {
         if (!datosSheet || datosSheet.length === 0) {
             setMensajeError('No hay datos en el Excel para procesar')
+            return
+        }
+
+        if (!estadoWhatsApp?.configurado || !estadoWhatsApp?.activo) {
+            setMensajeError('WhatsApp no está configurado o activo. Configure WhatsApp primero.')
             return
         }
         
@@ -235,6 +321,7 @@ export default function AsignacionComponent({
             if (resultado.success) {
                 setMensajeExito(`Envíos procesados: ${resultado.enviados} enviados, ${resultado.omitidos} omitidos`)
                 await cargarDatosAsignaciones()
+                await cargarContactosSheet()
             } else {
                 setMensajeError(resultado.error || 'Error al procesar envíos')
             }
@@ -281,6 +368,30 @@ export default function AsignacionComponent({
             nombre: columnaHeaderNombre ? (fila[columnaHeaderNombre] || '') : `Usuario ${index + 1}`,
             fila: fila
         })).filter(item => item.telefono && item.telefono.trim() !== '')
+    }
+
+    const obtenerContactosFiltrados = () => {
+        let contactosFiltrados = contactosSheet
+
+        if (filtroContactos === 'incluidos') {
+            contactosFiltrados = contactosSheet.filter(c => !c.excluido)
+        } else if (filtroContactos === 'excluidos') {
+            contactosFiltrados = contactosSheet.filter(c => c.excluido)
+        } else if (filtroContactos === 'enviados') {
+            contactosFiltrados = contactosSheet.filter(c => c.mensaje_enviado)
+        } else if (filtroContactos === 'pendientes') {
+            contactosFiltrados = contactosSheet.filter(c => !c.mensaje_enviado && !c.excluido)
+        }
+
+        if (busquedaContactos.trim()) {
+            const busqueda = busquedaContactos.toLowerCase()
+            contactosFiltrados = contactosFiltrados.filter(c => 
+                (c.nombre && c.nombre.toLowerCase().includes(busqueda)) ||
+                (c.telefono && c.telefono.includes(busqueda))
+            )
+        }
+
+        return contactosFiltrados
     }
 
     const formatearTelefono = (telefono) => {
@@ -348,6 +459,18 @@ export default function AsignacionComponent({
                     <p>Configura envío de mensajes de bienvenida desde Google Sheets a WhatsApp</p>
                 </div>
 
+                <div className={estilos.estadoWhatsApp}>
+                    <div className={`${estilos.whatsappStatus} ${estadoWhatsApp?.configurado && estadoWhatsApp?.activo ? estilos.activo : estilos.inactivo}`}>
+                        <ion-icon name="logo-whatsapp"></ion-icon>
+                        <span>
+                            {estadoWhatsApp?.configurado && estadoWhatsApp?.activo ? 
+                                'WhatsApp Activo' : 
+                                'WhatsApp No Configurado'
+                            }
+                        </span>
+                    </div>
+                </div>
+
                 <div className={estilos.navegacionSecciones}>
                     <button
                         className={`${estilos.seccionBtn} ${seccionActiva === 'asignaciones' ? estilos.activo : ''}`}
@@ -355,6 +478,15 @@ export default function AsignacionComponent({
                     >
                         <ion-icon name="settings-outline"></ion-icon>
                         <span>Configuración</span>
+                    </button>
+                    
+                    <button
+                        className={`${estilos.seccionBtn} ${seccionActiva === 'gestion' ? estilos.activo : ''}`}
+                        onClick={() => setSeccionActiva('gestion')}
+                    >
+                        <ion-icon name="people-outline"></ion-icon>
+                        <span>Gestión de Contactos</span>
+                        {contactosSheet.length > 0 && <span className={estilos.contador}>{contactosSheet.length}</span>}
                     </button>
                     
                     <button
@@ -465,7 +597,7 @@ export default function AsignacionComponent({
                                         <button
                                             className={estilos.botonProcesar}
                                             onClick={() => manejarProcesarEnvios(asignacion.id)}
-                                            disabled={enviandoMensajes || obtenerNumerosDisponibles().length === 0}
+                                            disabled={enviandoMensajes || obtenerNumerosDisponibles().length === 0 || !estadoWhatsApp?.configurado || !estadoWhatsApp?.activo}
                                         >
                                             {enviandoMensajes ? (
                                                 <>
@@ -478,6 +610,15 @@ export default function AsignacionComponent({
                                                     Procesar Envíos
                                                 </>
                                             )}
+                                        </button>
+                                        
+                                        <button
+                                            className={estilos.botonGestionar}
+                                            onClick={abrirModalGestionContactos}
+                                            disabled={!asignacion.activa}
+                                        >
+                                            <ion-icon name="people-outline"></ion-icon>
+                                            Gestionar Contactos
                                         </button>
                                         
                                         <button
@@ -516,445 +657,556 @@ export default function AsignacionComponent({
                 </div>
             )}
 
-            {seccionActiva === 'historial' && (
+            {seccionActiva === 'gestion' && (
                 <div className={estilos.seccionContent}>
                     <div className={estilos.seccionHeader}>
-                        <h3>Historial de Envíos</h3>
-                        <span className={estilos.totalEnvios}>
-                            Total: {historialEnvios.length} envíos
-                        </span>
+                        <h3>Gestión de Contactos</h3>
+                        <div className={estilos.filtrosContainer}>
+                            <select 
+                                value={filtroContactos} 
+                                onChange={(e) => setFiltroContactos(e.target.value)}
+                                className={estilos.selectFiltro}
+                            >
+                                <option value="todos">Todos los contactos</option>
+                                <option value="incluidos">Incluidos en envíos</option>
+                                <option value="excluidos">Excluidos de envíos</option>
+                                <option value="enviados">Ya recibieron mensaje</option>
+                                <option value="pendientes">Pendientes de envío</option>
+                            </select>
+                            
+                            <input
+                                type="text"
+                                placeholder="Buscar contactos..."
+                                value={busquedaContactos}
+                                onChange={(e) => setBusquedaContactos(e.target.value)}
+                                className={estilos.inputBusqueda}
+                            />
+                        </div>
                     </div>
 
-                    {historialEnvios.length > 0 ? (
-                        <div className={estilos.historialList}>
-                            {historialEnvios.map(envio => (
-                                <div key={envio.id} className={`${estilos.historialItem} ${estilos[envio.estado_envio]}`}>
-                                    <div className={estilos.historialInfo}>
-                                        <div className={estilos.historialIcono}>
-                                            <ion-icon name={
-                                                envio.estado_envio === 'enviado' ? 'checkmark-circle' :
-                                                envio.estado_envio === 'fallido' ? 'close-circle' :
-                                                envio.estado_envio === 'pendiente' ? 'time' : 'pause-circle'
-                                            }></ion-icon>
+                    {contactosSheet.length > 0 ? (
+                        <div className={estilos.contactosList}>
+                            {obtenerContactosFiltrados().map((contacto, index) => (
+                                <div key={`${contacto.telefono}-${index}`} className={`${estilos.contactoItem} ${contacto.excluido ? estilos.excluido : ''}`}>
+                                    <div className={estilos.contactoInfo}>
+                                        <div className={estilos.contactoIcono}>
+                                            <ion-icon name={contacto.excluido ? "person-remove" : "person"}></ion-icon>
                                         </div>
-                                        <div className={estilos.historialDetalles}>
-                                            <h4>{envio.nombre_destinatario || 'Sin nombre'}</h4>
-                                            <p>
-                                                <strong>Teléfono:</strong> {formatearTelefono(envio.numero_telefono)}
-                                                <span className={estilos.separador}>|</span>
-                                                <strong>Tipo:</strong> {envio.tipo_mensaje}
-                                            </p>
-                                            <p className={estilos.mensajePreview}>
-                                                {envio.contenido_mensaje?.substring(0, 150)}...
-                                            </p>
-                                            <div className={estilos.fechasInfo}>
-                                                <span>Programado: {formatearFecha(envio.fecha_programado)}</span>
-                                                {envio.fecha_enviado && (
-                                                    <span>Enviado: {formatearFecha(envio.fecha_enviado)}</span>
-                                                )}
-                                            </div>
-                                            {envio.error_envio && (
-                                                <div className={estilos.errorMensaje}>
-                                                    <ion-icon name="warning-outline"></ion-icon>
-                                                    {envio.error_envio}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className={estilos.historialEstado}>
-                                        <span className={`${estilos.estadoBadge} ${estilos[envio.estado_envio]}`}>
-                                            {envio.estado_envio}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className={estilos.emptyState}>
-                            <ion-icon name="time-outline"></ion-icon>
-                            <h3>No hay envíos registrados</h3>
-                            <p>Los envíos de mensajes aparecerán aquí una vez que configures y proceses asignaciones</p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {seccionActiva === 'envio-manual' && (
-                <div className={estilos.seccionContent}>
-                    <div className={estilos.seccionHeader}>
-                        <h3>Envío Manual de Mensajes</h3>
-                        <span className={estilos.numerosDisponibles}>
-                            {obtenerNumerosDisponibles().length} números disponibles
-                        </span>
-                    </div>
-
-                    {obtenerNumerosDisponibles().length > 0 ? (
-                        <div className={estilos.envioManualContainer}>
-                            <div className={estilos.numerosGrid}>
-                                <h4>Seleccionar destinatarios:</h4>
-                                <div className={estilos.numerosLista}>
-                                    {obtenerNumerosDisponibles().map(item => (
-                                        <div key={item.index} className={estilos.numeroItemManual}>
-                                            <label className={estilos.numeroCheckbox}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formEnvioManual.destinatarios.some(d => d.index === item.index)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setFormEnvioManual({
-                                                                ...formEnvioManual,
-                                                                destinatarios: [...formEnvioManual.destinatarios, {
-                                                                    index: item.index,
-                                                                    telefono: item.telefono,
-                                                                    nombre: item.nombre
-                                                                }]
-                                                            })
-                                                        } else {
-                                                            setFormEnvioManual({
-                                                                ...formEnvioManual,
-                                                                destinatarios: formEnvioManual.destinatarios.filter(d => d.index !== item.index)
-                                                            })
-                                                        }
-                                                    }}
-                                                />
-                                                <div className={estilos.numeroInfo}>
-                                                    <span className={estilos.numeroNombre}>{item.nombre}</span>
-                                                    <span className={estilos.numeroTelefono}>{formatearTelefono(item.telefono)}</span>
-                                                </div>
-                                            </label>
-                                            
-                                            <div className={estilos.numeroEditable}>
-                                                <input
-                                                    type="text"
-                                                    value={
-                                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.nombre || item.nombre
-                                                    }
-                                                    onChange={(e) => {
-                                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
-                                                            d.index === item.index ? {...d, nombre: e.target.value} : d
-                                                        )
-                                                        if (destinatarios.some(d => d.index === item.index)) {
-                                                            setFormEnvioManual({
-                                                                ...formEnvioManual,
-                                                                destinatarios
-                                                            })
-                                                        }
-                                                    }}
-                                                    placeholder="Nombre personalizado"
-                                                    className={estilos.inputNombre}
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={
-                                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.telefono || item.telefono
-                                                    }
-                                                    onChange={(e) => {
-                                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
-                                                            d.index === item.index ? {...d, telefono: e.target.value} : d
-                                                        )
-                                                        if (destinatarios.some(d => d.index === item.index)) {
-                                                            setFormEnvioManual({
-                                                                ...formEnvioManual,
-                                                                destinatarios
-                                                            })
-                                                        }
-                                                    }}
-                                                    placeholder="Número de teléfono"
-                                                    className={estilos.inputTelefono}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                
-                                <div className={estilos.seleccionAcciones}>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const todosDestinataarios = obtenerNumerosDisponibles().map(item => ({
-                                                index: item.index,
-                                                telefono: item.telefono,
-                                                nombre: item.nombre
-                                            }))
-                                            setFormEnvioManual({
-                                                ...formEnvioManual,
-                                                destinatarios: todosDestinataarios
-                                            })
-                                        }}
-                                        className={estilos.botonSeleccionarTodos}
-                                    >
-                                        Seleccionar Todos
-                                    </button>
-                                    
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFormEnvioManual({
-                                                ...formEnvioManual,
-                                                destinatarios: []
-                                            })
-                                        }}
-                                        className={estilos.botonLimpiarSeleccion}
-                                    >
-                                        Limpiar Selección
-                                    </button>
-                                </div>
+                                        <div className={estilos.contactoDetalles}>
+                            <h4>{contacto.nombre || 'Sin nombre'}</h4>
+                            <p>
+                                <strong>Teléfono:</strong> {formatearTelefono(contacto.telefono)}
+                                <span className={estilos.separador}>|</span>
+                                <strong>Fila:</strong> {contacto.fila_numero}
+                            </p>
+                            <div className={estilos.contactoEstados}>
+                                {contacto.mensaje_enviado && (
+                                    <span className={estilos.estadoBadge}>
+                                        <ion-icon name="checkmark-circle"></ion-icon>
+                                        Mensaje enviado
+                                    </span>
+                                )}
+                                {contacto.excluido && (
+                                    <span className={`${estilos.estadoBadge} ${estilos.excluido}`}>
+                                        <ion-icon name="ban"></ion-icon>
+                                        Excluido
+                                    </span>
+                                )}
+                                {!contacto.mensaje_enviado && !contacto.excluido && (
+                                    <span className={`${estilos.estadoBadge} ${estilos.pendiente}`}>
+                                        <ion-icon name="time"></ion-icon>
+                                        Pendiente
+                                    </span>
+                                )}
                             </div>
+                        </div>
+                    </div>
+                    
+                    <div className={estilos.contactoAcciones}>
+                        {contacto.excluido ? (
+                            <button
+                                className={estilos.botonIncluir}
+                                onClick={() => manejarIncluirContacto(contacto.id, contacto.telefono)}
+                                title="Incluir en envíos automáticos"
+                            >
+                                <ion-icon name="checkmark-circle-outline"></ion-icon>
+                                Incluir
+                            </button>
+                        ) : (
+                            <button
+                                className={estilos.botonExcluir}
+                                onClick={() => manejarExcluirContacto(contacto.id, contacto.telefono)}
+                                title="Excluir de envíos automáticos"
+                            >
+                                <ion-icon name="ban-outline"></ion-icon>
+                                Excluir
+                            </button>
+                        )}
+                        
+                        {contacto.fecha_ultimo_envio && (
+                            <div className={estilos.fechaEnvio}>
+                                <small>Último envío: {formatearFecha(contacto.fecha_ultimo_envio)}</small>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    ) : (
+        <div className={estilos.emptyState}>
+            <ion-icon name="people-outline"></ion-icon>
+            <h3>No hay contactos en el sheet</h3>
+            <p>Los contactos aparecerán aquí cuando tengas datos en el Excel y configuración activa</p>
+        </div>
+    )}
+</div>
+)}
 
-                            <div className={estilos.mensajePersonalizado}>
-                                <h4>Mensaje personalizado:</h4>
-                                <textarea
-                                    value={formEnvioManual.mensaje_personalizado}
-                                    onChange={(e) => setFormEnvioManual({
-                                        ...formEnvioManual,
-                                        mensaje_personalizado: e.target.value
-                                    })}
-                                    placeholder="Escribe tu mensaje personalizado aquí. Puedes usar {nombre} para personalizar."
-                                    rows="6"
-                                    className={estilos.textareaMensaje}
-                                />
-                                
-                                <div className={estilos.variablesInfo}>
-                                    <span>Variables disponibles: {'{nombre}'}</span>
-                                    <span>Seleccionados: {formEnvioManual.destinatarios.length}</span>
+{seccionActiva === 'historial' && (
+<div className={estilos.seccionContent}>
+    <div className={estilos.seccionHeader}>
+        <h3>Historial de Envíos</h3>
+        <span className={estilos.totalEnvios}>
+            Total: {historialEnvios.length} envíos
+        </span>
+    </div>
+
+    {historialEnvios.length > 0 ? (
+        <div className={estilos.historialList}>
+            {historialEnvios.map(envio => (
+                <div key={envio.id} className={`${estilos.historialItem} ${estilos[envio.estado_envio]}`}>
+                    <div className={estilos.historialInfo}>
+                        <div className={estilos.historialIcono}>
+                            <ion-icon name={
+                                envio.estado_envio === 'enviado' ? 'checkmark-circle' :
+                                envio.estado_envio === 'fallido' ? 'close-circle' :
+                                envio.estado_envio === 'pendiente' ? 'time' : 'pause-circle'
+                            }></ion-icon>
+                        </div>
+                        <div className={estilos.historialDetalles}>
+                            <h4>{envio.nombre_destinatario || 'Sin nombre'}</h4>
+                            <p>
+                                <strong>Teléfono:</strong> {formatearTelefono(envio.numero_telefono)}
+                                <span className={estilos.separador}>|</span>
+                                <strong>Tipo:</strong> {envio.tipo_mensaje}
+                            </p>
+                            <p className={estilos.mensajePreview}>
+                                {envio.contenido_mensaje?.substring(0, 150)}...
+                            </p>
+                            <div className={estilos.fechasInfo}>
+                                <span>Programado: {formatearFecha(envio.fecha_programado)}</span>
+                                {envio.fecha_enviado && (
+                                    <span>Enviado: {formatearFecha(envio.fecha_enviado)}</span>
+                                )}
+                            </div>
+                            {envio.error_envio && (
+                                <div className={estilos.errorMensaje}>
+                                    <ion-icon name="warning-outline"></ion-icon>
+                                    {envio.error_envio}
                                 </div>
-                                
-                                <button
-                                    onClick={async () => {
-                                        if (formEnvioManual.destinatarios.length === 0) {
-                                            setMensajeError('Selecciona al menos un destinatario')
-                                            return
-                                        }
-                                        
-                                        if (!formEnvioManual.mensaje_personalizado.trim()) {
-                                            setMensajeError('Escribe un mensaje personalizado')
-                                            return
-                                        }
-                                        
-                                        try {
-                                            setEnviandoMensajes(true)
-                                            setMensajeError('')
-                                            
-                                            let enviados = 0
-                                            let errores = 0
-                                            
-                                            for (const destinatario of formEnvioManual.destinatarios) {
-                                                try {
-                                                    const mensajePersonalizado = formEnvioManual.mensaje_personalizado
-                                                        .replace(/{nombre}/g, destinatario.nombre || 'Usuario')
-                                                    
-                                                    const resultado = await enviarMensajeManual(
-                                                        destinatario.telefono,
-                                                        mensajePersonalizado,
-                                                        destinatario.nombre,
-                                                        asignaciones[0]?.id
-                                                    )
-                                                    
-                                                    if (resultado.success) {
-                                                        enviados++
-                                                    } else {
-                                                        errores++
-                                                    }
-                                                } catch (error) {
-                                                    errores++
-                                                }
-                                                
-                                                await new Promise(resolve => setTimeout(resolve, 1000))
-                                            }
-                                            
-                                            setMensajeExito(`Envío completado: ${enviados} enviados, ${errores} errores`)
+                            )}
+                        </div>
+                    </div>
+                    <div className={estilos.historialEstado}>
+                        <span className={`${estilos.estadoBadge} ${estilos[envio.estado_envio]}`}>
+                            {envio.estado_envio}
+                        </span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    ) : (
+        <div className={estilos.emptyState}>
+            <ion-icon name="time-outline"></ion-icon>
+            <h3>No hay envíos registrados</h3>
+            <p>Los envíos de mensajes aparecerán aquí una vez que configures y proceses asignaciones</p>
+        </div>
+    )}
+</div>
+)}
+
+{seccionActiva === 'envio-manual' && (
+<div className={estilos.seccionContent}>
+    <div className={estilos.seccionHeader}>
+        <h3>Envío Manual de Mensajes</h3>
+        <span className={estilos.numerosDisponibles}>
+            {obtenerNumerosDisponibles().length} números disponibles
+        </span>
+    </div>
+
+    {!estadoWhatsApp?.configurado || !estadoWhatsApp?.activo ? (
+        <div className={estilos.advertenciaWhatsApp}>
+            <ion-icon name="warning-outline"></ion-icon>
+            <h4>WhatsApp no configurado</h4>
+            <p>Para enviar mensajes necesitas configurar WhatsApp primero en la sección de Configuración de Redes.</p>
+        </div>
+    ) : obtenerNumerosDisponibles().length > 0 ? (
+        <div className={estilos.envioManualContainer}>
+            <div className={estilos.numerosGrid}>
+                <h4>Seleccionar destinatarios:</h4>
+                <div className={estilos.numerosLista}>
+                    {obtenerNumerosDisponibles().map(item => (
+                        <div key={item.index} className={estilos.numeroItemManual}>
+                            <label className={estilos.numeroCheckbox}>
+                                <input
+                                    type="checkbox"
+                                    checked={formEnvioManual.destinatarios.some(d => d.index === item.index)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
                                             setFormEnvioManual({
-                                                destinatarios: [],
-                                                mensaje_personalizado: ''
+                                                ...formEnvioManual,
+                                                destinatarios: [...formEnvioManual.destinatarios, {
+                                                    index: item.index,
+                                                    telefono: item.telefono,
+                                                    nombre: item.nombre
+                                                }]
                                             })
-                                            
-                                            await cargarDatosAsignaciones()
-                                            
-                                        } catch (error) {
-                                            console.log('Error en envío manual:', error)
-                                            setMensajeError('Error al enviar mensajes')
-                                        } finally {
-                                            setEnviandoMensajes(false)
+                                        } else {
+                                            setFormEnvioManual({
+                                                ...formEnvioManual,
+                                                destinatarios: formEnvioManual.destinatarios.filter(d => d.index !== item.index)
+                                            })
                                         }
                                     }}
-                                    disabled={enviandoMensajes || formEnvioManual.destinatarios.length === 0}
-                                    className={estilos.botonEnviarManual}
-                                >
-                                    {enviandoMensajes ? (
-                                        <>
-                                            <div className={estilos.loadingSpinner}></div>
-                                            Enviando mensajes...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ion-icon name="send-outline"></ion-icon>
-                                            Enviar a {formEnvioManual.destinatarios.length} destinatarios
-                                        </>
-                                    )}
-                                </button>
+                                />
+                                <div className={estilos.numeroInfo}>
+                                    <span className={estilos.numeroNombre}>{item.nombre}</span>
+                                    <span className={estilos.numeroTelefono}>{formatearTelefono(item.telefono)}</span>
+                                </div>
+                            </label>
+                            
+                            <div className={estilos.numeroEditable}>
+                                <input
+                                    type="text"
+                                    value={
+                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.nombre || item.nombre
+                                    }
+                                    onChange={(e) => {
+                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
+                                            d.index === item.index ? {...d, nombre: e.target.value} : d
+                                        )
+                                        if (destinatarios.some(d => d.index === item.index)) {
+                                            setFormEnvioManual({
+                                                ...formEnvioManual,
+                                                destinatarios
+                                            })
+                                        }
+                                    }}
+                                    placeholder="Nombre personalizado"
+                                    className={estilos.inputNombre}
+                                />
+                                <input
+                                    type="text"
+                                    value={
+                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.telefono || item.telefono
+                                    }
+                                    onChange={(e) => {
+                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
+                                            d.index === item.index ? {...d, telefono: e.target.value} : d
+                                        )
+                                        if (destinatarios.some(d => d.index === item.index)) {
+                                            setFormEnvioManual({
+                                                ...formEnvioManual,
+                                                destinatarios
+                                            })
+                                        }
+                                    }}
+                                    placeholder="Número de teléfono"
+                                    className={estilos.inputTelefono}
+                                />
                             </div>
                         </div>
-                    ) : (
-                        <div className={estilos.emptyState}>
-                            <ion-icon name="send-outline"></ion-icon>
-                            <h3>No hay números disponibles</h3>
-                            <p>Asegúrate de que el Excel tenga datos y que hayas configurado las columnas correctamente</p>
-                        </div>
-                    )}
+                    ))}
                 </div>
-            )}
+                
+                <div className={estilos.seleccionAcciones}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const todosDestinataarios = obtenerNumerosDisponibles().map(item => ({
+                                index: item.index,
+                                telefono: item.telefono,
+                                nombre: item.nombre
+                            }))
+                            setFormEnvioManual({
+                                ...formEnvioManual,
+                                destinatarios: todosDestinataarios
+                            })
+                        }}
+                        className={estilos.botonSeleccionarTodos}
+                    >
+                        Seleccionar Todos
+                    </button>
+                    
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setFormEnvioManual({
+                                ...formEnvioManual,
+                                destinatarios: []
+                            })
+                        }}
+                        className={estilos.botonLimpiarSeleccion}
+                    >
+                        Limpiar Selección
+                    </button>
+                </div>
+            </div>
 
-            {modalAsignacion && (
-                <div className={estilos.modalOverlay} onClick={cerrarModales}>
-                    <div className={estilos.modal} onClick={(e) => e.stopPropagation()}>
-                        <div className={estilos.modalHeader}>
-                            <h2>
-                                {tipoModal === 'nueva' ? 'Nueva Asignación' : 'Editar Asignación'}
-                            </h2>
-                            <button className={estilos.botonCerrarModal} onClick={cerrarModales}>
-                                <ion-icon name="close-outline"></ion-icon>
-                            </button>
-                        </div>
+            <div className={estilos.mensajePersonalizado}>
+                <h4>Mensaje personalizado:</h4>
+                <textarea
+                    value={formEnvioManual.mensaje_personalizado}
+                    onChange={(e) => setFormEnvioManual({
+                        ...formEnvioManual,
+                        mensaje_personalizado: e.target.value
+                    })}
+                    placeholder="Escribe tu mensaje personalizado aquí. Puedes usar {nombre} para personalizar."
+                    rows="6"
+                    className={estilos.textareaMensaje}
+                />
+                
+                <div className={estilos.variablesInfo}>
+                    <span>Variables disponibles: {'{nombre}'}</span>
+                    <span>Seleccionados: {formEnvioManual.destinatarios.length}</span>
+                </div>
+                
+                <button
+                    onClick={async () => {
+                        if (formEnvioManual.destinatarios.length === 0) {
+                            setMensajeError('Selecciona al menos un destinatario')
+                            return
+                        }
                         
-                        <div className={estilos.modalContent}>
-                            <form onSubmit={manejarGuardarAsignacion} className={estilos.formulario}>
-                                <div className={estilos.seccionFormulario}>
-                                    <h3>Configuración de Columnas</h3>
+                        if (!formEnvioManual.mensaje_personalizado.trim()) {
+                            setMensajeError('Escribe un mensaje personalizado')
+                            return
+                        }
+                        
+                        try {
+                            setEnviandoMensajes(true)
+                            setMensajeError('')
+                            
+                            let enviados = 0
+                            let errores = 0
+                            
+                            for (const destinatario of formEnvioManual.destinatarios) {
+                                try {
+                                    const mensajePersonalizado = formEnvioManual.mensaje_personalizado
+                                        .replace(/{nombre}/g, destinatario.nombre || 'Usuario')
                                     
-                                    <div className={estilos.camposGrupo}>
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Columna de Teléfono *</label>
-                                            <select
-                                                value={formAsignacion.columna_telefono}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_telefono: e.target.value})}
-                                                required
-                                                className={estilos.selector}
-                                            >
-                                                <option value="">Seleccionar columna</option>
-                                                {columnasDisponibles.map(col => (
-                                                    <option key={col.letra} value={col.letra}>
-                                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Columna de Nombre (opcional)</label>
-                                            <select
-                                                value={formAsignacion.columna_nombre}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_nombre: e.target.value})}
-                                                className={estilos.selector}
-                                            >
-                                                <option value="">Sin columna de nombre</option>
-                                                {columnasDisponibles.map(col => (
-                                                    <option key={col.letra} value={col.letra}>
-                                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div className={estilos.camposGrupo}>
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Columna de Restricción (opcional)</label>
-                                            <select
-                                                value={formAsignacion.columna_restriccion}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_restriccion: e.target.value})}
-                                                className={estilos.selector}
-                                            >
-                                                <option value="">Sin restricción</option>
-                                                {columnasDisponibles.map(col => (
-                                                    <option key={col.letra} value={col.letra}>
-                                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Valor que restringe envío</label>
-                                            <input
-                                                type="text"
-                                                value={formAsignacion.valor_restriccion}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, valor_restriccion: e.target.value})}
-                                                placeholder="Ej: NO, ENVIADO, BLOQUEADO"
-                                                className={estilos.input}
-                                            />
-                                            <small>Si la celda contiene este valor, no se enviará el mensaje</small>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className={estilos.seccionFormulario}>
-                                    <h3>Mensaje de Bienvenida</h3>
+                                    const resultado = await enviarMensajeManual(
+                                        destinatario.telefono,
+                                        mensajePersonalizado,
+                                        destinatario.nombre,
+                                        asignaciones[0]?.id
+                                    )
                                     
-                                    <div className={estilos.campoFormulario}>
-                                        <label>Mensaje de Bienvenida *</label>
-                                        <textarea
-                                            value={formAsignacion.mensaje_bienvenida}
-                                            onChange={(e) => setFormAsignacion({...formAsignacion, mensaje_bienvenida: e.target.value})}
-                                            placeholder="Mensaje que se enviará a nuevos contactos"
-                                            rows="4"
-                                            required
-                                            className={estilos.textarea}
-                                        />
-                                    </div>
-                                    
-                                    <div className={estilos.variablesAyuda}>
-                                        <ion-icon name="information-circle-outline"></ion-icon>
-                                        <span>Puedes usar {'{nombre}'} en tu mensaje para personalizar</span>
-                                    </div>
-                                </div>
+                                    if (resultado.success) {
+                                        enviados++
+                                    } else {
+                                        errores++
+                                    }
+                                } catch (error) {
+                                    errores++
+                                }
+                                
+                                await new Promise(resolve => setTimeout(resolve, 1000))
+                            }
+                            
+                            setMensajeExito(`Envío completado: ${enviados} enviados, ${errores} errores`)
+                            setFormEnvioManual({
+                                destinatarios: [],
+                                mensaje_personalizado: ''
+                            })
+                            
+                            await cargarDatosAsignaciones()
+                            
+                        } catch (error) {
+                            console.log('Error en envío manual:', error)
+                            setMensajeError('Error al enviar mensajes')
+                        } finally {
+                            setEnviandoMensajes(false)
+                        }
+                    }}
+                    disabled={enviandoMensajes || formEnvioManual.destinatarios.length === 0}
+                    className={estilos.botonEnviarManual}
+                >
+                    {enviandoMensajes ? (
+                        <>
+                            <div className={estilos.loadingSpinner}></div>
+                            Enviando mensajes...
+                        </>
+                    ) : (
+                        <>
+                            <ion-icon name="send-outline"></ion-icon>
+                            Enviar a {formEnvioManual.destinatarios.length} destinatarios
+                        </>
+                    )}
+                </button>
+            </div>
+        </div>
+    ) : (
+        <div className={estilos.emptyState}>
+            <ion-icon name="send-outline"></ion-icon>
+            <h3>No hay números disponibles</h3>
+            <p>Asegúrate de que el Excel tenga datos y que hayas configurado las columnas correctamente</p>
+        </div>
+    )}
+</div>
+)}
 
-                                <div className={estilos.seccionFormulario}>
-                                    <h3>Configuración de Envío</h3>
-                                    
-                                    <div className={estilos.campoFormulario}>
-                                        <label className={estilos.checkboxLabel}>
-                                            <input
-                                                type="checkbox"
-                                                checked={formAsignacion.enviar_solo_nuevos}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, enviar_solo_nuevos: e.target.checked})}
-                                            />
-                                            <span className={estilos.checkmark}></span>
-                                            Enviar solo a contactos que nunca han recibido mensajes
-                                        </label>
-                                    </div>
-                                </div>
+{modalAsignacion && (
+<div className={estilos.modalOverlay} onClick={cerrarModales}>
+    <div className={estilos.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={estilos.modalHeader}>
+            <h2>
+                {tipoModal === 'nueva' ? 'Nueva Asignación' : 'Editar Asignación'}
+            </h2>
+            <button className={estilos.botonCerrarModal} onClick={cerrarModales}>
+                <ion-icon name="close-outline"></ion-icon>
+            </button>
+        </div>
+        
+        <div className={estilos.modalContent}>
+            <form onSubmit={manejarGuardarAsignacion} className={estilos.formulario}>
+                <div className={estilos.seccionFormulario}>
+                    <h3>Configuración de Columnas</h3>
+                    
+                    <div className={estilos.camposGrupo}>
+                        <div className={estilos.campoFormulario}>
+                            <label>Columna de Teléfono *</label>
+                            <select
+                                value={formAsignacion.columna_telefono}
+                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_telefono: e.target.value})}
+                                required
+                                className={estilos.selector}
+                            >
+                                <option value="">Seleccionar columna</option>
+                                {columnasDisponibles.map(col => (
+                                    <option key={col.letra} value={col.letra}>
+                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                                {mensajeError && (
-                                    <div className={estilos.mensajeError}>
-                                        <ion-icon name="alert-circle-outline"></ion-icon>
-                                        {mensajeError}
-                                    </div>
-                                )}
+                        <div className={estilos.campoFormulario}>
+                            <label>Columna de Nombre (opcional)</label>
+                            <select
+                                value={formAsignacion.columna_nombre}
+                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_nombre: e.target.value})}
+                                className={estilos.selector}
+                            >
+                                <option value="">Sin columna de nombre</option>
+                                {columnasDisponibles.map(col => (
+                                    <option key={col.letra} value={col.letra}>
+                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
 
-                                {mensajeExito && (
-                                    <div className={estilos.mensajeExito}>
-                                        <ion-icon name="checkmark-circle-outline"></ion-icon>
-                                        {mensajeExito}
-                                    </div>
-                                )}
+                    <div className={estilos.camposGrupo}>
+                        <div className={estilos.campoFormulario}>
+                            <label>Columna de Restricción (opcional)</label>
+                            <select
+                                value={formAsignacion.columna_restriccion}
+                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_restriccion: e.target.value})}
+                                className={estilos.selector}
+                            >
+                                <option value="">Sin restricción</option>
+                                {columnasDisponibles.map(col => (
+                                    <option key={col.letra} value={col.letra}>
+                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                                <div className={estilos.botonesFormulario}>
-                                    <button type="button" onClick={cerrarModales} className={estilos.botonCancelar}>
-                                        Cancelar
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={procesando} 
-                                        className={estilos.botonGuardar}
-                                    >
-                                        {procesando ? 'Guardando...' : 'Guardar'}
-                                    </button>
-                                </div>
-                            </form>
+                        <div className={estilos.campoFormulario}>
+                            <label>Valor que restringe envío</label>
+                            <input
+                                type="text"
+                                value={formAsignacion.valor_restriccion}
+                                onChange={(e) => setFormAsignacion({...formAsignacion, valor_restriccion: e.target.value})}
+                                placeholder="Ej: NO, ENVIADO, BLOQUEADO"
+                                className={estilos.input}
+                            />
+                            <small>Si la celda contiene este valor, no se enviará el mensaje</small>
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className={estilos.seccionFormulario}>
+                    <h3>Mensaje de Bienvenida</h3>
+                    
+                    <div className={estilos.campoFormulario}>
+                        <label>Mensaje de Bienvenida *</label>
+                        <textarea
+                            value={formAsignacion.mensaje_bienvenida}
+                            onChange={(e) => setFormAsignacion({...formAsignacion, mensaje_bienvenida: e.target.value})}
+                            placeholder="Mensaje que se enviará a nuevos contactos"
+                            rows="4"
+                            required
+                            className={estilos.textarea}
+                        />
+                    </div>
+                    
+                    <div className={estilos.variablesAyuda}>
+                        <ion-icon name="information-circle-outline"></ion-icon>
+                        <span>Puedes usar {'{nombre}'} en tu mensaje para personalizar</span>
+                    </div>
+                </div>
+
+                <div className={estilos.seccionFormulario}>
+                    <h3>Configuración de Envío</h3>
+                    
+                    <div className={estilos.campoFormulario}>
+                        <label className={estilos.checkboxLabel}>
+                            <input
+                                type="checkbox"
+                                checked={formAsignacion.enviar_solo_nuevos}
+                                onChange={(e) => setFormAsignacion({...formAsignacion, enviar_solo_nuevos: e.target.checked})}
+                            />
+                            <span className={estilos.checkmark}></span>
+                            Enviar solo a contactos que nunca han recibido mensajes
+                        </label>
+                    </div>
+                </div>
+
+                {mensajeError && (
+                    <div className={estilos.mensajeError}>
+                        <ion-icon name="alert-circle-outline"></ion-icon>
+                        {mensajeError}
+                    </div>
+                )}
+
+                {mensajeExito && (
+                    <div className={estilos.mensajeExito}>
+                        <ion-icon name="checkmark-circle-outline"></ion-icon>
+                        {mensajeExito}
+                    </div>
+                )}
+
+                <div className={estilos.botonesFormulario}>
+                    <button type="button" onClick={cerrarModales} className={estilos.botonCancelar}>
+                        Cancelar
+                    </button>
+                    <button 
+                        type="submit" 
+                        disabled={procesando} 
+                        className={estilos.botonGuardar}
+                    >
+                        {procesando ? 'Guardando...' : 'Guardar'}
+                    </button>
+                </div>
+            </form>
         </div>
-    )
+    </div>
+</div>
+)}
+</div>
+)
 }
