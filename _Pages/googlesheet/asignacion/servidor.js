@@ -103,7 +103,6 @@ export async function crearAsignacion(datos) {
             columna_restriccion,
             mensaje_bienvenida,
             enviar_solo_nuevos,
-            intervalo_horas,
             valor_restriccion
         } = datos
 
@@ -117,11 +116,10 @@ export async function crearAsignacion(datos) {
                 columna_restriccion,
                 mensaje_bienvenida,
                 enviar_solo_nuevos,
-                intervalo_horas,
                 valor_restriccion,
                 activa,
                 fecha_creacion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
         `, [
             usuario.id,
             spreadsheet_id,
@@ -131,7 +129,6 @@ export async function crearAsignacion(datos) {
             columna_restriccion || null,
             mensaje_bienvenida,
             enviar_solo_nuevos ? 1 : 0,
-            intervalo_horas || 24,
             valor_restriccion || null
         ])
 
@@ -171,7 +168,6 @@ export async function actualizarAsignacion(id, datos) {
             columna_restriccion,
             mensaje_bienvenida,
             enviar_solo_nuevos,
-            intervalo_horas,
             valor_restriccion
         } = datos
 
@@ -182,7 +178,6 @@ export async function actualizarAsignacion(id, datos) {
                 columna_restriccion = ?,
                 mensaje_bienvenida = ?,
                 enviar_solo_nuevos = ?,
-                intervalo_horas = ?,
                 valor_restriccion = ?,
                 fecha_actualizacion = NOW()
             WHERE id = ? AND usuario_id = ?
@@ -192,7 +187,6 @@ export async function actualizarAsignacion(id, datos) {
             columna_restriccion || null,
             mensaje_bienvenida,
             enviar_solo_nuevos ? 1 : 0,
-            intervalo_horas || 24,
             valor_restriccion || null,
             id,
             usuario.id
@@ -360,19 +354,17 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 continue
             }
 
-            // Verificar si ya se envió mensaje a este número
+            // Verificar si ya se envió mensaje a este número (solo si enviar_solo_nuevos está activado)
             if (asignacion.enviar_solo_nuevos) {
                 const [existeEnvio] = await db.execute(`
                     SELECT id FROM google_sheets_envios_historial 
                     WHERE asignacion_id = ? AND numero_telefono = ? AND estado_envio = 'enviado'
-                    AND fecha_enviado >= DATE_SUB(NOW(), INTERVAL ? HOUR)
-                `, [asignacionId, telefonoLimpio, asignacion.intervalo_horas])
+                `, [asignacionId, telefonoLimpio])
 
                 if (existeEnvio.length > 0) {
                     omitidos++
                     continue
-                }
-            }
+                }}
 
             // Personalizar mensaje
             const mensajePersonalizado = asignacion.mensaje_bienvenida

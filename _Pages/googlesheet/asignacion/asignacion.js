@@ -29,8 +29,6 @@ export default function AsignacionComponent({
     
     // Estados de modales
     const [modalAsignacion, setModalAsignacion] = useState(false)
-    const [modalHistorial, setModalHistorial] = useState(false)
-    const [modalEnvioManual, setModalEnvioManual] = useState(false)
     const [tipoModal, setTipoModal] = useState('')
     const [asignacionSeleccionada, setAsignacionSeleccionada] = useState(null)
     
@@ -41,7 +39,6 @@ export default function AsignacionComponent({
         columna_restriccion: '',
         mensaje_bienvenida: '',
         enviar_solo_nuevos: true,
-        intervalo_horas: 24,
         valor_restriccion: 'NO'
     })
     
@@ -92,7 +89,7 @@ export default function AsignacionComponent({
         if (datosSheet.length > 0) {
             const headers = Object.keys(datosSheet[0])
             const columnas = headers.map((header, index) => ({
-                letra: String.fromCharCode(65 + index), // A, B, C, etc.
+                letra: String.fromCharCode(65 + index),
                 nombre: header,
                 muestra: datosSheet[0][header] || ''
             }))
@@ -134,7 +131,6 @@ export default function AsignacionComponent({
                 columna_restriccion: asignacion.columna_restriccion || '',
                 mensaje_bienvenida: asignacion.mensaje_bienvenida || '',
                 enviar_solo_nuevos: asignacion.enviar_solo_nuevos || true,
-                intervalo_horas: asignacion.intervalo_horas || 24,
                 valor_restriccion: asignacion.valor_restriccion || 'NO'
             })
         } else {
@@ -144,7 +140,6 @@ export default function AsignacionComponent({
                 columna_restriccion: '',
                 mensaje_bienvenida: 'Hola {nombre}, bienvenido a nuestro servicio. Estamos aquí para ayudarte.',
                 enviar_solo_nuevos: true,
-                intervalo_horas: 24,
                 valor_restriccion: 'NO'
             })
         }
@@ -154,8 +149,6 @@ export default function AsignacionComponent({
 
     const cerrarModales = () => {
         setModalAsignacion(false)
-        setModalHistorial(false)
-        setModalEnvioManual(false)
         setTipoModal('')
         setAsignacionSeleccionada(null)
         setMensajeError('')
@@ -259,7 +252,6 @@ export default function AsignacionComponent({
         
         const asignacion = asignaciones[0]
         if (!asignacion) {
-            // Si no hay asignación, mostrar todos los números disponibles
             const headers = Object.keys(datosSheet[0])
             return datosSheet.map((fila, index) => {
                 const telefono = Object.values(fila).find(val => 
@@ -445,8 +437,10 @@ export default function AsignacionComponent({
                                         </div>
 
                                         <div className={estilos.configuracionInfo}>
-                                            <span>Intervalo: <strong>{asignacion.intervalo_horas}h</strong></span>
                                             <span>Solo nuevos: <strong>{asignacion.enviar_solo_nuevos ? 'Sí' : 'No'}</strong></span>
+                                            {asignacion.columna_restriccion && (
+                                                <span>Restricción: <strong>No enviar si contiene "{asignacion.valor_restriccion}"</strong></span>
+                                            )}
                                         </div>
 
                                         {estadisticas && (
@@ -565,7 +559,7 @@ export default function AsignacionComponent({
                                                     {envio.error_envio}
                                                 </div>
                                             )}
-                                            </div>
+                                        </div>
                                     </div>
                                     <div className={estilos.historialEstado}>
                                         <span className={`${estilos.estadoBadge} ${estilos[envio.estado_envio]}`}>
@@ -765,7 +759,6 @@ export default function AsignacionComponent({
                                                     errores++
                                                 }
                                                 
-                                                // Pausa entre envíos
                                                 await new Promise(resolve => setTimeout(resolve, 1000))
                                             }
                                             
@@ -919,19 +912,6 @@ export default function AsignacionComponent({
                                     <h3>Configuración de Envío</h3>
                                     
                                     <div className={estilos.campoFormulario}>
-                                        <label>Intervalo entre Mensajes (horas)</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="168"
-                                            value={formAsignacion.intervalo_horas}
-                                            onChange={(e) => setFormAsignacion({...formAsignacion, intervalo_horas: parseInt(e.target.value)})}
-                                            className={estilos.input}
-                                        />
-                                        <small>Tiempo mínimo entre envíos al mismo número</small>
-                                    </div>
-                                    
-                                    <div className={estilos.campoFormulario}>
                                         <label className={estilos.checkboxLabel}>
                                             <input
                                                 type="checkbox"
@@ -939,7 +919,7 @@ export default function AsignacionComponent({
                                                 onChange={(e) => setFormAsignacion({...formAsignacion, enviar_solo_nuevos: e.target.checked})}
                                             />
                                             <span className={estilos.checkmark}></span>
-                                            Enviar solo a contactos nuevos (que no han recibido mensajes antes)
+                                            Enviar solo a contactos que nunca han recibido mensajes
                                         </label>
                                     </div>
                                 </div>

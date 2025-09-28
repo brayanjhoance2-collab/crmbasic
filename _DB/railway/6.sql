@@ -1,5 +1,5 @@
 -- ============================================================================
--- TABLA PARA ASIGNACIÓN DE MENSAJES AUTOMÁTICOS DESDE GOOGLE SHEETS - SIMPLIFICADA
+-- TABLA PARA ASIGNACIÓN DE MENSAJES AUTOMÁTICOS DESDE GOOGLE SHEETS - FINAL
 -- ============================================================================
 
 USE railway;
@@ -25,7 +25,6 @@ CREATE TABLE google_sheets_asignaciones (
     
     -- Configuración de envío
     enviar_solo_nuevos BOOLEAN DEFAULT 1,
-    intervalo_horas INT DEFAULT 24, -- Intervalo mínimo entre mensajes
     valor_restriccion VARCHAR(50) NULL, -- Valor que indica NO enviar (ej: "NO", "ENVIADO", etc.)
     
     -- Estado
