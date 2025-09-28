@@ -2,6 +2,7 @@
 import db from "@/_DB/db"
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
+import { MessageService } from '@/_services/messageService'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'crm_whatsapp_facebook_2024'
 
@@ -68,60 +69,6 @@ export async function obtenerUsuarioActual() {
         }
         
         return null
-    }
-}
-
-// FUNCIÓN PRINCIPAL: Obtener configuración Instagram con respaldo automático
-async function obtenerConfiguracionInstagramConRespaldo() {
-    try {
-        // PASO 1: Intentar configuración principal
-        const [configPrincipal] = await db.execute(`
-            SELECT * FROM configuraciones_instagram ORDER BY fecha_creacion DESC LIMIT 1
-        `)
-
-        if (configPrincipal.length > 0 && configPrincipal[0].access_token && configPrincipal[0].instagram_business_id) {
-            console.log('[INSTAGRAM] Usando configuración principal:', configPrincipal[0].nombre_configuracion)
-            return {
-                ...configPrincipal[0],
-                es_respaldo: false,
-                tipo: 'principal'
-            }
-        }
-
-        // PASO 2: Buscar en instagram_business_accounts (tabla de respaldo)
-        const [configRespaldo] = await db.execute(`
-            SELECT 
-                instagram_business_id,
-                nombre,
-                username,
-                'EAAL9O4wqCfcBO1oFaYbQtZBxmJ3MDyBE6WDNLp1WP3kWOdUzQYjRfNvBgUZBm3MJt7vWNFj2e4iKDtl8w9t' as access_token,
-                'instagram_webhook_verify_2024_seguro' as webhook_verify_token,
-                fecha_vinculacion
-            FROM instagram_business_accounts 
-            WHERE activa = 1 
-            ORDER BY fecha_vinculacion DESC LIMIT 1
-        `)
-
-        if (configRespaldo.length > 0) {
-            console.log('[INSTAGRAM] Usando configuración de respaldo desde instagram_business_accounts')
-            return {
-                id: 999,
-                nombre_configuracion: configRespaldo[0].nombre || 'Instagram Respaldo',
-                instagram_business_id: configRespaldo[0].instagram_business_id,
-                access_token: configRespaldo[0].access_token,
-                webhook_verify_token: configRespaldo[0].webhook_verify_token,
-                fecha_creacion: configRespaldo[0].fecha_vinculacion,
-                es_respaldo: true,
-                tipo: 'respaldo_bd'
-            }
-        }
-
-        // PASO 3: Si no hay nada, error
-        throw new Error('No hay configuración de Instagram disponible')
-
-    } catch (error) {
-        console.log('[INSTAGRAM] Error obteniendo configuración:', error)
-        throw error
     }
 }
 
@@ -219,7 +166,7 @@ export async function obtenerMensajesConversacion(conversacionId) {
         `, usuario.rol === 'usuario' ? [conversacionId, usuario.id] : [conversacionId])
 
         if (conversacionCheck.length === 0) {
-            throw new Error('Conversación no encontrada o sin acceso')
+            throw new Error('Conversacion no encontrada o sin acceso')
         }
 
         const [mensajes] = await db.execute(`
@@ -245,7 +192,7 @@ export async function obtenerMensajesConversacion(conversacionId) {
     }
 }
 
-export async function enviarMensaje(conversacionId, datosMessage) {
+export async function enviarMensajeManual(conversacionId, datosMessage) {
     try {
         const usuario = await obtenerUsuarioActual()
         if (!usuario) {
@@ -254,7 +201,7 @@ export async function enviarMensaje(conversacionId, datosMessage) {
 
         const [conversacionCheck] = await db.execute(`
             SELECT conv.*, c.id as contacto_id, c.nombre as contacto_nombre,
-                   c.whatsapp_id, c.instagram_id, c.facebook_id
+                   c.whatsapp_id, c.instagram_id, c.facebook_id, c.telefono as contacto_telefono
             FROM conversaciones conv
             INNER JOIN contactos c ON conv.contacto_id = c.id
             WHERE conv.id = ?
@@ -262,251 +209,175 @@ export async function enviarMensaje(conversacionId, datosMessage) {
         `, usuario.rol === 'usuario' ? [conversacionId, usuario.id] : [conversacionId])
 
         if (conversacionCheck.length === 0) {
-            throw new Error('Conversación no encontrada o sin acceso')
+            throw new Error('Conversacion no encontrada o sin acceso')
         }
 
         const conversacion = conversacionCheck[0]
 
-        // Insertar mensaje en BD
-        const [resultado] = await db.execute(`
-            INSERT INTO mensajes (
-                conversacion_id,
-                contacto_id,
-                tipo_mensaje,
-                contenido,
-                archivo_url,
-                archivo_tipo,
-                direccion,
-                enviado_por,
-                estado_entrega,
-                fecha_envio
-            ) VALUES (?, ?, ?, ?, ?, ?, 'saliente', ?, 'enviado', NOW())
-        `, [
-            conversacionId,
-            conversacion.contacto_id,
-            datosMessage.tipo || 'texto',
-            datosMessage.contenido,
-            datosMessage.archivo_url || null,
-            datosMessage.archivo_tipo || null,
-            usuario.id
-        ])
+        const resultado = await MessageService.sendUnifiedMessage(conversacion, datosMessage)
 
-        // Actualizar conversación
-        await db.execute(`
-            UPDATE conversaciones SET 
-                fecha_ultima_actividad = NOW(),
-                mensajes_agente = mensajes_agente + 1,
-                total_mensajes = total_mensajes + 1,
-                estado = CASE WHEN estado = 'cerrada' THEN 'en_proceso' ELSE estado END
-            WHERE id = ?
-        `, [conversacionId])
+        if (resultado.success) {
+            const [insertResult] = await db.execute(`
+                INSERT INTO mensajes (
+                    conversacion_id,
+                    contacto_id,
+                    tipo_mensaje,
+                    contenido,
+                    archivo_url,
+                    archivo_tipo,
+                    direccion,
+                    enviado_por,
+                    estado_entrega,
+                    fecha_envio,
+                    mensaje_id_externo
+                ) VALUES (?, ?, ?, ?, ?, ?, 'saliente', ?, 'entregado', NOW(), ?)
+            `, [
+                conversacionId,
+                conversacion.contacto_id,
+                datosMessage.tipo || 'texto',
+                datosMessage.contenido,
+                datosMessage.archivo_url || null,
+                datosMessage.archivo_tipo || null,
+                usuario.id,
+                resultado.messageId
+            ])
 
-        // Actualizar contacto
-        await db.execute(`
-            UPDATE contactos SET 
-                ultima_interaccion = NOW()
-            WHERE id = ?
-        `, [conversacion.contacto_id])
-
-        // Enviar mensaje real a la plataforma
-        const resultadoEnvio = await enviarMensajeRealPlataforma(conversacion, datosMessage)
-        
-        if (resultadoEnvio.success) {
             await db.execute(`
-                UPDATE mensajes SET 
-                    estado_entrega = 'entregado',
-                    timestamp_entrega = NOW(),
-                    mensaje_id_externo = ?
+                UPDATE conversaciones SET 
+                    fecha_ultima_actividad = NOW(),
+                    mensajes_agente = mensajes_agente + 1,
+                    total_mensajes = total_mensajes + 1,
+                    estado = CASE WHEN estado = 'cerrada' THEN 'en_proceso' ELSE estado END
                 WHERE id = ?
-            `, [resultadoEnvio.messageId || null, resultado.insertId])
+            `, [conversacionId])
+
+            await db.execute(`
+                UPDATE contactos SET 
+                    ultima_interaccion = NOW()
+                WHERE id = ?
+            `, [conversacion.contacto_id])
+
+            return {
+                success: true,
+                mensajeId: insertResult.insertId,
+                messageIdExterno: resultado.messageId,
+                message: 'Mensaje enviado exitosamente'
+            }
         } else {
-            await db.execute(`
-                UPDATE mensajes SET 
-                    estado_entrega = 'fallido'
-                WHERE id = ?
-            `, [resultado.insertId])
-            throw new Error(resultadoEnvio.error || 'Error al enviar mensaje')
-        }
-
-        return {
-            success: true,
-            mensajeId: resultado.insertId,
-            message: 'Mensaje enviado exitosamente'
+            throw new Error(resultado.error || 'Error al enviar mensaje')
         }
 
     } catch (error) {
-        console.log('Error al enviar mensaje:', error)
+        console.log('Error al enviar mensaje manual:', error)
         throw error
     }
 }
 
-async function enviarMensajeRealPlataforma(conversacion, mensaje) {
+export async function enviarMensajeDirecto(plataforma, recipientId, numeroTelefono, contenido) {
     try {
-        switch (conversacion.plataforma) {
-            case 'whatsapp':
-                return await enviarMensajeWhatsApp(conversacion, mensaje)
-            case 'instagram':
-                return await enviarMensajeInstagram(conversacion, mensaje)
-            case 'facebook':
-                return await enviarMensajeFacebook(conversacion, mensaje)
-            default:
-                throw new Error('Plataforma no soportada')
-        }
-    } catch (error) {
-        console.log('Error al enviar mensaje a plataforma:', error)
-        return { success: false, error: error.message }
-    }
-}
-
-async function enviarMensajeWhatsApp(conversacion, mensaje) {
-    try {
-        // Obtener configuración activa de WhatsApp
-        const [configActiva] = await db.execute(`
-            SELECT ca.*, cb.session_id, cw.phone_number_id, cw.access_token
-            FROM configuraciones_activas ca
-            LEFT JOIN configuraciones_baileys cb ON ca.config_id = cb.id AND ca.tipo_config = 'baileys'
-            LEFT JOIN configuraciones_whatsapp cw ON ca.config_id = cw.id AND ca.tipo_config = 'api'
-            WHERE ca.plataforma = 'whatsapp'
-        `)
-
-        if (configActiva.length === 0) {
-            throw new Error('No hay configuración activa de WhatsApp')
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
         }
 
-        const config = configActiva[0]
+        const contactoSimulado = {
+            whatsapp_id: plataforma === 'whatsapp' ? recipientId : null,
+            instagram_id: plataforma === 'instagram' ? recipientId : null,
+            facebook_id: plataforma === 'facebook' ? recipientId : null,
+            telefono: numeroTelefono,
+            contacto_telefono: numeroTelefono
+        }
 
-        if (config.tipo_config === 'baileys') {
-            // Usar Baileys para enviar
-            const { enviarMensajeBaileys } = await import('../configuracionredes/servidor')
-            const resultado = await enviarMensajeBaileys(conversacion.id, mensaje.contenido)
-            return resultado
-        } else if (config.tipo_config === 'api') {
-            // Usar WhatsApp Business API
-            const response = await fetch(`https://graph.facebook.com/v18.0/${config.phone_number_id}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${config.access_token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    to: conversacion.whatsapp_id,
-                    type: 'text',
-                    text: {
-                        body: mensaje.contenido
-                    }
-                })
-            })
+        const mensaje = {
+            contenido: contenido,
+            tipo: 'texto'
+        }
 
-            if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error?.message || 'Error en WhatsApp API')
+        const resultado = await MessageService.sendToContact(contactoSimulado, plataforma, mensaje)
+
+        if (resultado.success) {
+            let contactoId = null
+
+            if (plataforma === 'whatsapp' && numeroTelefono) {
+                const [contactoRows] = await db.execute(`
+                    SELECT id FROM contactos WHERE telefono = ? OR whatsapp_id = ?
+                `, [numeroTelefono, recipientId])
+
+                if (contactoRows.length === 0) {
+                    const [insertResult] = await db.execute(`
+                        INSERT INTO contactos (
+                            whatsapp_id,
+                            telefono,
+                            nombre,
+                            origen,
+                            estado,
+                            primera_interaccion,
+                            fecha_creacion
+                        ) VALUES (?, ?, ?, 'whatsapp', 'nuevo', NOW(), NOW())
+                    `, [recipientId, numeroTelefono, numeroTelefono])
+                    
+                    contactoId = insertResult.insertId
+                } else {
+                    contactoId = contactoRows[0].id
+                }
+            } else if (plataforma === 'instagram' && recipientId) {
+                const [contactoRows] = await db.execute(`
+                    SELECT id FROM contactos WHERE instagram_id = ?
+                `, [recipientId])
+
+                if (contactoRows.length === 0) {
+                    const [insertResult] = await db.execute(`
+                        INSERT INTO contactos (
+                            instagram_id,
+                            nombre,
+                            origen,
+                            estado,
+                            primera_interaccion,
+                            fecha_creacion
+                        ) VALUES (?, ?, 'instagram', 'nuevo', NOW(), NOW())
+                    `, [recipientId, recipientId])
+                    
+                    contactoId = insertResult.insertId
+                } else {
+                    contactoId = contactoRows[0].id
+                }
+            } else if (plataforma === 'facebook' && recipientId) {
+                const [contactoRows] = await db.execute(`
+                    SELECT id FROM contactos WHERE facebook_id = ?
+                `, [recipientId])
+
+                if (contactoRows.length === 0) {
+                    const [insertResult] = await db.execute(`
+                        INSERT INTO contactos (
+                            facebook_id,
+                            nombre,
+                            origen,
+                            estado,
+                            primera_interaccion,
+                            fecha_creacion
+                        ) VALUES (?, ?, 'facebook', 'nuevo', NOW(), NOW())
+                    `, [recipientId, recipientId])
+                    
+                    contactoId = insertResult.insertId
+                } else {
+                    contactoId = contactoRows[0].id
+                }
             }
 
-            const data = await response.json()
-            return { 
-                success: true, 
-                messageId: data.messages?.[0]?.id || null
+            return {
+                success: true,
+                messageId: resultado.messageId,
+                platform: resultado.platform,
+                contactoId: contactoId,
+                message: 'Mensaje directo enviado exitosamente'
             }
-        }
-
-        throw new Error('Tipo de configuración no válido')
-
-    } catch (error) {
-        console.log('Error enviando mensaje WhatsApp:', error)
-        return { success: false, error: error.message }
-    }
-}
-
-// FUNCIÓN MODIFICADA: enviarMensajeInstagram con respaldo automático
-async function enviarMensajeInstagram(conversacion, mensaje) {
-    try {
-        // Obtener configuración con respaldo automático
-        const config = await obtenerConfiguracionInstagramConRespaldo()
-        
-        console.log(`[INSTAGRAM] Enviando mensaje con configuración: ${config.tipo}`)
-        
-        const response = await fetch(`https://graph.facebook.com/v18.0/${config.instagram_business_id}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${config.access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                recipient: {
-                    id: conversacion.instagram_id
-                },
-                message: {
-                    text: mensaje.contenido
-                }
-            })
-        })
-
-        if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.error?.message || 'Error en Instagram API')
-        }
-
-        const data = await response.json()
-        
-        // Actualizar métricas solo si es configuración principal
-        if (!config.es_respaldo) {
-            await actualizarMetricasInstagram('mensaje_enviado', config.id)
-        }
-        
-        return { 
-            success: true, 
-            messageId: data.message_id || null
+        } else {
+            throw new Error(resultado.error || 'Error al enviar mensaje directo')
         }
 
     } catch (error) {
-        console.log('Error enviando mensaje Instagram:', error)
-        return { success: false, error: error.message }
-    }
-}
-
-async function enviarMensajeFacebook(conversacion, mensaje) {
-    try {
-        const [configRows] = await db.execute(`
-            SELECT * FROM configuraciones_facebook LIMIT 1
-        `)
-
-        if (configRows.length === 0) {
-            throw new Error('No hay configuración de Facebook')
-        }
-
-        const config = configRows[0]
-
-        const response = await fetch(`https://graph.facebook.com/v18.0/me/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${config.page_access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                recipient: {
-                    id: conversacion.facebook_id
-                },
-                message: {
-                    text: mensaje.contenido
-                }
-            })
-        })
-
-        if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.error?.message || 'Error en Facebook API')
-        }
-
-        const data = await response.json()
-        return { 
-            success: true, 
-            messageId: data.message_id || null
-        }
-
-    } catch (error) {
-        console.log('Error enviando mensaje Facebook:', error)
-        return { success: false, error: error.message }
+        console.log('Error al enviar mensaje directo:', error)
+        throw error
     }
 }
 
@@ -528,7 +399,7 @@ export async function marcarConversacionLeida(conversacionId) {
         return { success: true }
 
     } catch (error) {
-        console.log('Error al marcar como leída:', error)
+        console.log('Error al marcar como leida:', error)
         throw error
     }
 }
@@ -551,10 +422,10 @@ export async function asignarConversacion(conversacionId, usuarioId) {
             WHERE id = ?
         `, [usuarioId, conversacionId])
 
-        return { success: true, message: 'Conversación asignada exitosamente' }
+        return { success: true, message: 'Conversacion asignada exitosamente' }
 
     } catch (error) {
-        console.log('Error al asignar conversación:', error)
+        console.log('Error al asignar conversacion:', error)
         throw error
     }
 }
@@ -568,7 +439,7 @@ export async function cambiarEstadoConversacion(conversacionId, nuevoEstado) {
 
         const estadosValidos = ['abierta', 'en_proceso', 'cerrada']
         if (!estadosValidos.includes(nuevoEstado)) {
-            throw new Error('Estado no válido')
+            throw new Error('Estado no valido')
         }
 
         const whereClause = usuario.rol === 'usuario' ? 
@@ -626,37 +497,94 @@ export async function obtenerUsuarios() {
     }
 }
 
-// Función para actualizar métricas de Instagram
-async function actualizarMetricasInstagram(tipo, configId) {
+export async function obtenerContactoPorId(contactoId) {
     try {
-        if (!configId || configId === 999) return // No actualizar métricas para respaldo
-
-        if (tipo === 'mensaje_recibido') {
-            await db.execute(`
-                INSERT INTO instagram_metricas (configuracion_id, fecha_metrica, mensajes_recibidos)
-                VALUES (?, CURDATE(), 1)
-                ON DUPLICATE KEY UPDATE mensajes_recibidos = mensajes_recibidos + 1
-            `, [configId])
-        } else if (tipo === 'mensaje_enviado') {
-            await db.execute(`
-                INSERT INTO instagram_metricas (configuracion_id, fecha_metrica, mensajes_enviados)
-                VALUES (?, CURDATE(), 1)
-                ON DUPLICATE KEY UPDATE mensajes_enviados = mensajes_enviados + 1
-            `, [configId])
-        } else if (tipo === 'conversacion_nueva') {
-            await db.execute(`
-                INSERT INTO instagram_metricas (configuracion_id, fecha_metrica, conversaciones_nuevas)
-                VALUES (?, CURDATE(), 1)
-                ON DUPLICATE KEY UPDATE conversaciones_nuevas = conversaciones_nuevas + 1
-            `, [configId])
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
         }
 
+        const [rows] = await db.execute(`
+            SELECT * FROM contactos WHERE id = ?
+        `, [contactoId])
+
+        return rows.length > 0 ? rows[0] : null
+
     } catch (error) {
-        console.log('Error actualizando métricas Instagram:', error)
+        console.log('Error al obtener contacto:', error)
+        throw error
     }
 }
 
-// Función para procesar mensajes entrantes desde webhooks
+export async function buscarContactoPorPlataforma(plataforma, identificador) {
+    try {
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
+        }
+
+        let whereField = ''
+        switch (plataforma) {
+            case 'whatsapp':
+                whereField = 'whatsapp_id = ? OR telefono = ?'
+                break
+            case 'instagram':
+                whereField = 'instagram_id = ?'
+                break
+            case 'facebook':
+                whereField = 'facebook_id = ?'
+                break
+            default:
+                throw new Error('Plataforma no valida')
+        }
+
+        const params = plataforma === 'whatsapp' ? [identificador, identificador] : [identificador]
+
+        const [rows] = await db.execute(`
+            SELECT * FROM contactos WHERE ${whereField}
+        `, params)
+
+        return rows.length > 0 ? rows[0] : null
+
+    } catch (error) {
+        console.log('Error al buscar contacto:', error)
+        throw error
+    }
+}
+
+export async function obtenerConfiguracionActiva(plataforma) {
+    try {
+        const [rows] = await db.execute(`
+            SELECT ca.*, 
+                   CASE 
+                       WHEN ca.plataforma = 'whatsapp' AND ca.tipo_config = 'api' THEN cw.access_token
+                       WHEN ca.plataforma = 'whatsapp' AND ca.tipo_config = 'baileys' THEN cb.session_id
+                       WHEN ca.plataforma = 'instagram' THEN ci.access_token
+                       WHEN ca.plataforma = 'facebook' THEN cf.page_access_token
+                       ELSE NULL
+                   END as access_token,
+                   CASE 
+                       WHEN ca.plataforma = 'whatsapp' AND ca.tipo_config = 'api' THEN cw.phone_number_id
+                       WHEN ca.plataforma = 'instagram' THEN ci.instagram_business_id
+                       WHEN ca.plataforma = 'facebook' THEN cf.page_id
+                       ELSE NULL
+                   END as platform_id
+            FROM configuraciones_activas ca
+            LEFT JOIN configuraciones_whatsapp cw ON ca.config_id = cw.id AND ca.tipo_config = 'api'
+            LEFT JOIN configuraciones_baileys cb ON ca.config_id = cb.id AND ca.tipo_config = 'baileys'
+            LEFT JOIN configuraciones_instagram ci ON ca.config_id = ci.id
+            LEFT JOIN configuraciones_facebook cf ON ca.config_id = cf.id
+            WHERE ca.plataforma = ?
+        `, [plataforma])
+
+        return rows.length > 0 ? rows[0] : null
+
+    } catch (error) {
+        console.log('Error al obtener configuracion activa:', error)
+        return null
+    }
+}
+
 export async function procesarMensajeEntrante(plataforma, datosWebhook) {
     try {
         await db.execute(`
@@ -686,7 +614,6 @@ export async function procesarMensajeEntrante(plataforma, datosWebhook) {
                 throw new Error('Plataforma no soportada')
         }
 
-        // Ejecutar automatizaciones después de procesar el mensaje
         try {
             const { procesarMensajeParaAutomatizaciones } = await import('../automatizacion/servidor')
             await procesarMensajeParaAutomatizaciones(conversacionId, {
@@ -760,7 +687,7 @@ async function procesarMensajeWhatsApp(datos) {
     let [conversacionRows] = await db.execute(`
         SELECT id FROM conversaciones 
         WHERE contacto_id = ? AND plataforma = 'whatsapp' AND estado != 'cerrada'
-        ORDER BY fecha_inicio DESC LIMIT 1
+        ORDER BY fecha_ultima_actividad DESC LIMIT 1
     `, [contactoId])
 
     let conversacionId
@@ -818,7 +745,6 @@ async function procesarMensajeWhatsApp(datos) {
     return { contactoId, conversacionId }
 }
 
-// FUNCIÓN MODIFICADA: procesarMensajeInstagram con respaldo
 async function procesarMensajeInstagram(datos) {
     const instagramId = datos.sender_id || datos.from
     const contenido = datos.message || datos.text || ''
@@ -849,7 +775,7 @@ async function procesarMensajeInstagram(datos) {
     let [conversacionRows] = await db.execute(`
         SELECT id FROM conversaciones 
         WHERE contacto_id = ? AND plataforma = 'instagram' AND estado != 'cerrada'
-        ORDER BY fecha_inicio DESC LIMIT 1
+        ORDER BY fecha_ultima_actividad DESC LIMIT 1
     `, [contactoId])
 
     let conversacionId
@@ -865,16 +791,6 @@ async function procesarMensajeInstagram(datos) {
         `, [contactoId])
         
         conversacionId = resultado.insertId
-        
-        // Actualizar métricas usando configuración con respaldo
-        try {
-            const config = await obtenerConfiguracionInstagramConRespaldo()
-            if (!config.es_respaldo) {
-                await actualizarMetricasInstagram('conversacion_nueva', config.id)
-            }
-        } catch (error) {
-            console.log('Error actualizando métricas conversación nueva:', error)
-        }
     } else {
         conversacionId = conversacionRows[0].id
     }
@@ -913,16 +829,6 @@ async function procesarMensajeInstagram(datos) {
         UPDATE contactos SET ultima_interaccion = NOW() WHERE id = ?
     `, [contactoId])
 
-    // Actualizar métricas mensaje recibido
-    try {
-        const config = await obtenerConfiguracionInstagramConRespaldo()
-        if (!config.es_respaldo) {
-            await actualizarMetricasInstagram('mensaje_recibido', config.id)
-        }
-    } catch (error) {
-        console.log('Error actualizando métricas mensaje recibido:', error)
-    }
-
     return { contactoId, conversacionId }
 }
 
@@ -956,7 +862,7 @@ async function procesarMensajeFacebook(datos) {
     let [conversacionRows] = await db.execute(`
         SELECT id FROM conversaciones 
         WHERE contacto_id = ? AND plataforma = 'facebook' AND estado != 'cerrada'
-        ORDER BY fecha_inicio DESC LIMIT 1
+        ORDER BY fecha_ultima_actividad DESC LIMIT 1
     `, [contactoId])
 
     let conversacionId
@@ -1013,295 +919,140 @@ async function procesarMensajeFacebook(datos) {
     return { contactoId, conversacionId }
 }
 
-// FUNCIÓN ADICIONAL: Procesar mensajes Instagram desde webhook específico
-export async function procesarMensajeInstagramWebhook(messageData) {
+export async function obtenerEstadisticasConversaciones() {
     try {
-        console.log('[INSTAGRAM WEBHOOK] Procesando mensaje:', JSON.stringify(messageData, null, 2))
-
-        if (!messageData.message) {
-            console.log('[INSTAGRAM WEBHOOK] No es un mensaje entrante, ignorando')
-            return { success: false, message: 'No es un mensaje entrante' }
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
         }
 
-        const instagramId = messageData.sender.id
-        const messageId = messageData.message.mid
-        const timestamp = messageData.timestamp
+        const whereCondition = usuario.rol === 'usuario' ? 
+            'WHERE asignada_a = ? OR asignada_a IS NULL' : 
+            ''
+        const params = usuario.rol === 'usuario' ? [usuario.id] : []
 
-        // Extraer contenido del mensaje
-        let contenido = ''
-        let tipoMensaje = 'texto'
+        const [stats] = await db.execute(`
+            SELECT 
+                COUNT(*) as total_conversaciones,
+                SUM(CASE WHEN estado = 'abierta' THEN 1 ELSE 0 END) as abiertas,
+                SUM(CASE WHEN estado = 'en_proceso' THEN 1 ELSE 0 END) as en_proceso,
+                SUM(CASE WHEN estado = 'cerrada' THEN 1 ELSE 0 END) as cerradas,
+                SUM(CASE WHEN plataforma = 'whatsapp' THEN 1 ELSE 0 END) as whatsapp,
+                SUM(CASE WHEN plataforma = 'instagram' THEN 1 ELSE 0 END) as instagram,
+                SUM(CASE WHEN plataforma = 'facebook' THEN 1 ELSE 0 END) as facebook
+            FROM conversaciones 
+            ${whereCondition}
+        `, params)
 
-        if (messageData.message.text) {
-            contenido = messageData.message.text
-            tipoMensaje = 'texto'
-        } else if (messageData.message.attachments) {
-            const attachment = messageData.message.attachments[0]
-            
-            switch (attachment.type) {
-                case 'image':
-                    contenido = 'Imagen'
-                    tipoMensaje = 'imagen'
-                    break
-                case 'video':
-                    contenido = 'Video'
-                    tipoMensaje = 'video'
-                    break
-                case 'audio':
-                    contenido = 'Audio'
-                    tipoMensaje = 'audio'
-                    break
-                case 'file':
-                    contenido = 'Archivo'
-                    tipoMensaje = 'documento'
-                    break
-                default:
-                    contenido = 'Mensaje multimedia'
-            }
-        } else {
-            contenido = 'Mensaje desconocido'
-        }
-
-        console.log(`[INSTAGRAM WEBHOOK] Mensaje de ${instagramId}: ${contenido}`)
-
-        // Buscar o crear contacto
-        let [contactoRows] = await db.execute(`
-            SELECT id FROM contactos WHERE instagram_id = ?
-        `, [instagramId])
-
-        let contactoId
-        if (contactoRows.length === 0) {
-            const [resultado] = await db.execute(`
-                INSERT INTO contactos (
-                    instagram_id,
-                    nombre,
-                    origen,
-                    estado,
-                    primera_interaccion,
-                    fecha_creacion
-                ) VALUES (?, ?, 'instagram', 'nuevo', FROM_UNIXTIME(?), NOW())
-            `, [instagramId, instagramId, Math.floor(timestamp / 1000)])
-            
-            contactoId = resultado.insertId
-            console.log(`[INSTAGRAM WEBHOOK] Contacto creado: ${contactoId}`)
-        } else {
-            contactoId = contactoRows[0].id
-            
-            await db.execute(`
-                UPDATE contactos SET ultima_interaccion = FROM_UNIXTIME(?) WHERE id = ?
-            `, [Math.floor(timestamp / 1000), contactoId])
-        }
-
-        // Buscar o crear conversación
-        let [conversacionRows] = await db.execute(`
-            SELECT id FROM conversaciones 
-            WHERE contacto_id = ? AND plataforma = 'instagram' AND estado != 'cerrada'
-        `, [contactoId])
-
-        let conversacionId
-        if (conversacionRows.length === 0) {
-            const [resultado] = await db.execute(`
-                INSERT INTO conversaciones (
-                    contacto_id,
-                    plataforma,
-                    estado,
-                    fecha_inicio,
-                    fecha_ultima_actividad
-                ) VALUES (?, 'instagram', 'abierta', FROM_UNIXTIME(?), FROM_UNIXTIME(?))
-            `, [contactoId, Math.floor(timestamp / 1000), Math.floor(timestamp / 1000)])
-            
-            conversacionId = resultado.insertId
-            console.log(`[INSTAGRAM WEBHOOK] Conversación creada: ${conversacionId}`)
-            
-            // Actualizar métricas conversación nueva
-            try {
-                const config = await obtenerConfiguracionInstagramConRespaldo()
-                if (!config.es_respaldo) {
-                    await actualizarMetricasInstagram('conversacion_nueva', config.id)
-                }
-            } catch (error) {
-                console.log('Error actualizando métricas conversación nueva:', error)
-            }
-        } else {
-            conversacionId = conversacionRows[0].id
-        }
-
-        // Verificar si el mensaje ya existe
-        const [mensajeExistente] = await db.execute(`
-            SELECT id FROM mensajes WHERE mensaje_id_externo = ?
-        `, [messageId])
-
-        if (mensajeExistente.length > 0) {
-            console.log('[INSTAGRAM WEBHOOK] Mensaje ya procesado previamente')
-            return { success: true, message: 'Mensaje ya procesado' }
-        }
-
-        // Insertar mensaje
-        await db.execute(`
-            INSERT INTO mensajes (
-                conversacion_id,
-                contacto_id,
-                mensaje_id_externo,
-                tipo_mensaje,
-                contenido,
-                direccion,
-                estado_entrega,
-                fecha_envio
-            ) VALUES (?, ?, ?, ?, ?, 'entrante', 'entregado', FROM_UNIXTIME(?))
-        `, [conversacionId, contactoId, messageId, tipoMensaje, contenido, Math.floor(timestamp / 1000)])
-
-        // Actualizar contadores de conversación
-        await db.execute(`
-            UPDATE conversaciones SET 
-                fecha_ultima_actividad = FROM_UNIXTIME(?),
-                mensajes_contacto = mensajes_contacto + 1,
-                total_mensajes = total_mensajes + 1
-            WHERE id = ?
-        `, [Math.floor(timestamp / 1000), conversacionId])
-
-        // Actualizar métricas mensaje recibido
-        try {
-            const config = await obtenerConfiguracionInstagramConRespaldo()
-            if (!config.es_respaldo) {
-                await actualizarMetricasInstagram('mensaje_recibido', config.id)
-            }
-        } catch (error) {
-            console.log('Error actualizando métricas mensaje recibido:', error)
-        }
-
-        console.log('[INSTAGRAM WEBHOOK] Mensaje procesado exitosamente')
-
-        // Ejecutar automatizaciones si están disponibles
-        try {
-            const { procesarMensajeParaAutomatizaciones } = await import('../../automatizacion/servidor')
-            
-            const resultadoAuto = await procesarMensajeParaAutomatizaciones(conversacionId, {
-                contenido: contenido,
-                tipo_mensaje: tipoMensaje,
-                direccion: 'entrante'
-            })
-            
-            console.log('[INSTAGRAM WEBHOOK] Automatizaciones procesadas:', resultadoAuto)
-        } catch (autoError) {
-            console.log('[INSTAGRAM WEBHOOK] Error ejecutando automatizaciones:', autoError)
-        }
-
-        return { success: true, message: 'Mensaje procesado exitosamente' }
+        return stats[0]
 
     } catch (error) {
-        console.log('[INSTAGRAM WEBHOOK] Error procesando mensaje:', error)
+        console.log('Error al obtener estadisticas:', error)
         throw error
     }
 }
 
-// FUNCIÓN ADICIONAL: Verificar estado Instagram con respaldo
-export async function verificarEstadoInstagramConRespaldo() {
+export async function obtenerMensajesRecientes(limite = 10) {
     try {
-        const config = await obtenerConfiguracionInstagramConRespaldo()
-        
-        console.log(`[INSTAGRAM] Verificando estado con configuración: ${config.tipo}`)
-        
-        if (config.es_respaldo) {
-            return {
-                conectado: true,
-                tipo: config.tipo,
-                mensaje: `Usando configuración de respaldo: ${config.tipo}`,
-                configuracion: config.nombre_configuracion,
-                business_id: config.instagram_business_id
-            }
+        const usuario = await obtenerUsuarioActual()
+        if (!usuario) {
+            throw new Error('Usuario no autenticado')
         }
 
-        // Verificar configuración principal
-        try {
-            const response = await fetch(`https://graph.facebook.com/v18.0/${config.instagram_business_id}?fields=name,username&access_token=${config.access_token}`)
-            const data = await response.json()
+        const whereCondition = usuario.rol === 'usuario' ? 
+            'AND (conv.asignada_a = ? OR conv.asignada_a IS NULL)' : 
+            ''
+        const params = usuario.rol === 'usuario' ? [limite, usuario.id] : [limite]
 
-            if (data.error) {
-                console.log('[INSTAGRAM] Error en configuración principal, buscando respaldo')
-                // Si falla la principal, intentar respaldo
-                try {
-                    const configRespaldo = await obtenerConfiguracionInstagramConRespaldo()
-                    return {
-                        conectado: true,
-                        tipo: 'respaldo_por_error',
-                        mensaje: `Error en configuración principal: ${data.error.message}. Usando respaldo.`,
-                        configuracion: configRespaldo.nombre_configuracion,
-                        business_id: configRespaldo.instagram_business_id
-                    }
-                } catch (respaldoError) {
-                    return {
-                        conectado: false,
-                        tipo: 'error',
-                        mensaje: 'Error en configuración principal y no hay respaldo disponible'
-                    }
-                }
-            }
+        const [mensajes] = await db.execute(`
+            SELECT 
+                m.*,
+                c.nombre as contacto_nombre,
+                conv.plataforma,
+                u.nombre as agente_nombre
+            FROM mensajes m
+            INNER JOIN conversaciones conv ON m.conversacion_id = conv.id
+            INNER JOIN contactos c ON m.contacto_id = c.id
+            LEFT JOIN usuarios u ON m.enviado_por = u.id
+            WHERE 1=1 ${whereCondition}
+            ORDER BY m.fecha_envio DESC
+            LIMIT ?
+        `, params)
 
-            return {
-                conectado: true,
-                tipo: 'principal',
-                mensaje: `Conectado con ${data.name} (@${data.username})`,
-                configuracion: config.nombre_configuracion,
-                business_id: config.instagram_business_id
-            }
-
-        } catch (error) {
-            console.log('[INSTAGRAM] Error verificando configuración principal:', error)
-            return {
-                conectado: true,
-                tipo: 'respaldo_por_error',
-                mensaje: 'Error verificando configuración principal. Usando respaldo.',
-                configuracion: 'Instagram Respaldo',
-                business_id: config.instagram_business_id
-            }
-        }
+        return mensajes
 
     } catch (error) {
-        console.log('[INSTAGRAM] Error general verificando estado:', error)
-        return {
-            conectado: false,
-            tipo: 'error',
-            mensaje: 'Error al verificar estado de Instagram'
-        }
+        console.log('Error al obtener mensajes recientes:', error)
+        throw error
     }
 }
 
-// FUNCIÓN ADICIONAL: Insertar datos de prueba en instagram_business_accounts si no existen
-export async function insertarDatosPruebaInstagram() {
+export async function validarConfiguracionPlataforma(plataforma) {
     try {
-        const [existingRows] = await db.execute(`
-            SELECT COUNT(*) as count FROM instagram_business_accounts 
-            WHERE instagram_business_id = '17841400008460056'
-        `)
-
-        if (existingRows[0].count === 0) {
-            await db.execute(`
-                INSERT INTO instagram_business_accounts (
-                    instagram_business_id,
-                    nombre,
-                    username,
-                    profile_picture_url,
-                    followers_count,
-                    media_count,
-                    activa,
-                    fecha_vinculacion
-                ) VALUES (
-                    '17841400008460056',
-                    'CRM Test Account',
-                    'crm_test',
-                    NULL,
-                    0,
-                    0,
-                    1,
-                    NOW()
-                )
-            `)
-            console.log('[INSTAGRAM] Datos de prueba insertados en instagram_business_accounts')
+        const config = await obtenerConfiguracionActiva(plataforma)
+        
+        if (!config) {
+            return {
+                valida: false,
+                mensaje: `No hay configuracion activa para ${plataforma}`
+            }
         }
 
-        return { success: true, message: 'Datos de prueba verificados' }
+        switch (plataforma) {
+            case 'whatsapp':
+                if (config.tipo_config === 'api') {
+                    if (!config.access_token || !config.platform_id) {
+                        return {
+                            valida: false,
+                            mensaje: 'Configuracion de WhatsApp API incompleta'
+                        }
+                    }
+                } else if (config.tipo_config === 'baileys') {
+                    if (!config.platform_id) {
+                        return {
+                            valida: false,
+                            mensaje: 'Configuracion de Baileys incompleta'
+                        }
+                    }
+                }
+                break
+                
+            case 'instagram':
+                if (!config.access_token || !config.platform_id) {
+                    return {
+                        valida: false,
+                        mensaje: 'Configuracion de Instagram incompleta'
+                    }
+                }
+                break
+                
+            case 'facebook':
+                if (!config.access_token || !config.platform_id) {
+                    return {
+                        valida: false,
+                        mensaje: 'Configuracion de Facebook incompleta'
+                    }
+                }
+                break
+                
+            default:
+                return {
+                    valida: false,
+                    mensaje: 'Plataforma no soportada'
+                }
+        }
+
+        return {
+            valida: true,
+            mensaje: `Configuracion de ${plataforma} valida`,
+            config: config
+        }
 
     } catch (error) {
-        console.log('[INSTAGRAM] Error insertando datos de prueba:', error)
-        return { success: false, message: 'Error verificando datos de prueba' }
+        console.log('Error al validar configuracion:', error)
+        return {
+            valida: false,
+            mensaje: 'Error al validar configuracion'
+        }
     }
 }

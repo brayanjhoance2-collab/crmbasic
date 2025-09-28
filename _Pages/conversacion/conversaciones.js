@@ -6,7 +6,6 @@ import {
     obtenerUsuarioActual,
     obtenerConversaciones,
     obtenerMensajesConversacion,
-    enviarMensaje,
     marcarConversacionLeida,
     asignarConversacion,
     cambiarEstadoConversacion,
@@ -29,13 +28,19 @@ export default function ConversacionesPage() {
     const [busqueda, setBusqueda] = useState('')
     const [mensajeError, setMensajeError] = useState('')
 
+    // Estados para envío directo
+    const [showEnvioDirecto, setShowEnvioDirecto] = useState(false)
+    const [plataformaDirecta, setPlataformaDirecta] = useState('whatsapp')
+    const [recipientId, setRecipientId] = useState('')
+    const [numeroTelefono, setNumeroTelefono] = useState('')
+    const [mensajeDirecto, setMensajeDirecto] = useState('')
+
     const mensajesRef = useRef(null)
     const inputRef = useRef(null)
 
     useEffect(() => {
         verificarYCargarDatos()
         
-        // Actualizar conversaciones cada 30 segundos
         const interval = setInterval(cargarConversaciones, 30000)
         return () => clearInterval(interval)
     }, [])
@@ -44,7 +49,6 @@ export default function ConversacionesPage() {
         if (conversacionActiva) {
             cargarMensajesConversacion()
             
-            // Auto-scroll al último mensaje
             setTimeout(() => {
                 scrollToBottom()
             }, 100)
@@ -147,6 +151,36 @@ export default function ConversacionesPage() {
         setMensajeError('')
     }
 
+    const enviarMensajeUnificado = async (contenido, conversacionId = null, plataforma = null, recipient = null, telefono = null) => {
+        try {
+            const response = await fetch('/api/messaging/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    conversacionId,
+                    contenido,
+                    plataforma,
+                    recipientId: recipient,
+                    numeroTelefono: telefono
+                })
+            })
+
+            const resultado = await response.json()
+
+            if (!response.ok) {
+                throw new Error(resultado.error || 'Error al enviar mensaje')
+            }
+
+            return resultado
+
+        } catch (error) {
+            console.log('Error en envio unificado:', error)
+            throw error
+        }
+    }
+
     const manejarEnviarMensaje = async (e) => {
         e.preventDefault()
         if (!nuevoMensaje.trim() || !conversacionActiva || enviandoMensaje) return
@@ -155,10 +189,10 @@ export default function ConversacionesPage() {
             setEnviandoMensaje(true)
             setMensajeError('')
             
-            await enviarMensaje(conversacionActiva.id, {
-                contenido: nuevoMensaje.trim(),
-                tipo: 'texto'
-            })
+            await enviarMensajeUnificado(
+                nuevoMensaje.trim(),
+                conversacionActiva.id
+            )
             
             setNuevoMensaje('')
             
@@ -177,6 +211,48 @@ export default function ConversacionesPage() {
         }
     }
 
+    const manejarEnvioDirecto = async (e) => {
+        e.preventDefault()
+        if (!mensajeDirecto.trim() || enviandoMensaje) return
+
+        if (plataformaDirecta === 'whatsapp' && !recipientId && !numeroTelefono) {
+            setMensajeError('Para WhatsApp necesitas el numero de telefono')
+            return
+        }
+
+        if ((plataformaDirecta === 'instagram' || plataformaDirecta === 'facebook') && !recipientId) {
+            setMensajeError(`Para ${plataformaDirecta} necesitas el ID del usuario`)
+            return
+        }
+
+        try {
+            setEnviandoMensaje(true)
+            setMensajeError('')
+            
+            await enviarMensajeUnificado(
+                mensajeDirecto.trim(),
+                null,
+                plataformaDirecta,
+                recipientId || null,
+                numeroTelefono || null
+            )
+            
+            setMensajeDirecto('')
+            setRecipientId('')
+            setNumeroTelefono('')
+            setShowEnvioDirecto(false)
+            
+            setMensajeError('Mensaje enviado exitosamente')
+            setTimeout(() => setMensajeError(''), 3000)
+            
+        } catch (error) {
+            console.log('Error al enviar mensaje directo:', error)
+            setMensajeError('Error al enviar mensaje: ' + error.message)
+        } finally {
+            setEnviandoMensaje(false)
+        }
+    }
+
     const manejarAsignarConversacion = async (usuarioId) => {
         if (!conversacionActiva) return
         
@@ -185,8 +261,8 @@ export default function ConversacionesPage() {
             await asignarConversacion(conversacionActiva.id, usuarioId)
             await cargarConversaciones()
         } catch (error) {
-            console.log('Error al asignar conversación:', error)
-            setMensajeError('Error al asignar conversación: ' + error.message)
+            console.log('Error al asignar conversacion:', error)
+            setMensajeError('Error al asignar conversacion: ' + error.message)
         }
     }
 
@@ -272,7 +348,6 @@ export default function ConversacionesPage() {
 
     return (
         <div className={estilos.conversacionesContainer}>
-            {/* Panel de conversaciones */}
             <div className={estilos.conversacionesPanel}>
                 <div className={estilos.panelHeader}>
                     <div className={estilos.headerTitle}>
@@ -281,6 +356,85 @@ export default function ConversacionesPage() {
                             {conversaciones.length}
                         </span>
                     </div>
+                    
+                    <div className={estilos.accionesHeader}>
+                        <button 
+                            className={estilos.botonEnvioDirecto}
+                            onClick={() => setShowEnvioDirecto(!showEnvioDirecto)}
+                        >
+                            <ion-icon name="send-outline"></ion-icon>
+                            Envio Directo
+                        </button>
+                    </div>
+
+                    {showEnvioDirecto && (
+                        <div className={estilos.envioDirectoPanel}>
+                            <div className={estilos.envioDirectoHeader}>
+                                <h3>Envio Directo</h3>
+                                <button onClick={() => setShowEnvioDirecto(false)}>
+                                    <ion-icon name="close-outline"></ion-icon>
+                                </button>
+                            </div>
+                            
+                            <form onSubmit={manejarEnvioDirecto} className={estilos.envioDirectoForm}>
+                                <div className={estilos.filtro}>
+                                    <select 
+                                        value={plataformaDirecta} 
+                                        onChange={(e) => setPlataformaDirecta(e.target.value)}
+                                        className={estilos.selectFiltro}
+                                    >
+                                        <option value="whatsapp">WhatsApp</option>
+                                        <option value="instagram">Instagram</option>
+                                        <option value="facebook">Facebook</option>
+                                    </select>
+                                </div>
+
+                                {plataformaDirecta === 'whatsapp' && (
+                                    <input
+                                        type="text"
+                                        placeholder="Numero de telefono (ej: 5491234567890)"
+                                        value={numeroTelefono}
+                                        onChange={(e) => setNumeroTelefono(e.target.value)}
+                                        className={estilos.inputDirecto}
+                                    />
+                                )}
+
+                                {(plataformaDirecta === 'instagram' || plataformaDirecta === 'facebook') && (
+                                    <input
+                                        type="text"
+                                        placeholder={`ID de usuario de ${plataformaDirecta}`}
+                                        value={recipientId}
+                                        onChange={(e) => setRecipientId(e.target.value)}
+                                        className={estilos.inputDirecto}
+                                        required
+                                    />
+                                )}
+
+                                <textarea
+                                    placeholder="Escribe tu mensaje..."
+                                    value={mensajeDirecto}
+                                    onChange={(e) => setMensajeDirecto(e.target.value)}
+                                    className={estilos.textareaDirecto}
+                                    required
+                                />
+
+                                <button 
+                                    type="submit" 
+                                    disabled={enviandoMensaje}
+                                    className={estilos.botonEnviarDirecto}
+                                >
+                                    {enviandoMensaje ? (
+                                        <div className={estilos.loadingSpinner}></div>
+                                    ) : (
+                                        <>
+                                            <ion-icon name="send-outline"></ion-icon>
+                                            Enviar
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+                        </div>
+                    )}
                     
                     <div className={estilos.filtrosContainer}>
                         <div className={estilos.filtro}>
@@ -389,7 +543,6 @@ export default function ConversacionesPage() {
                 </div>
             </div>
 
-            {/* Panel de chat */}
             <div className={estilos.chatPanel}>
                 {conversacionActiva ? (
                     <>
@@ -525,7 +678,7 @@ export default function ConversacionesPage() {
                             ) : (
                                 <div className={estilos.emptyMensajes}>
                                     <ion-icon name="chatbubble-outline"></ion-icon>
-                                    <p>No hay mensajes en esta conversación</p>
+                                    <p>No hay mensajes en esta conversacion</p>
                                 </div>
                             )}
                         </div>
@@ -562,8 +715,8 @@ export default function ConversacionesPage() {
                 ) : (
                     <div className={estilos.noChatSelected}>
                         <ion-icon name="chatbubbles-outline"></ion-icon>
-                        <h3>Selecciona una conversación</h3>
-                        <p>Elige una conversación de la lista para comenzar a chatear</p>
+                        <h3>Selecciona una conversacion</h3>
+                        <p>Elige una conversacion de la lista para comenzar a chatear</p>
                     </div>
                 )}
             </div>
