@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import estilos from "./googlesheet.module.css"
+import AsignacionComponent from './asignacion/asignacion'
 import { 
     obtenerUsuarioActual,
     obtenerConfiguracionGoogleSheets,
@@ -740,6 +741,11 @@ export default function GoogleSheetsPage() {
                                 </div>
                             )}
                         </div>
+                        <AsignacionComponent 
+                            spreadsheetSeleccionado={spreadsheetSeleccionado}
+                            sheetSeleccionado={sheetSeleccionado} 
+                            datosSheet={datosSheet}
+                        />
                     </div>
                 </div>
             )}
