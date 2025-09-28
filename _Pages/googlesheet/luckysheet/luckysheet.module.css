@@ -1,4 +1,4 @@
-/* ESTILOS PARA LUCKYSHEET COMPONENT - AGREGAR AL FINAL DE googlesheet.module.css */
+/* luckysheet.module.css - Archivo completo para LuckysheetComponent */
 
 .luckysheetWrapper {
     width: 100%;
@@ -6,278 +6,491 @@
     flex-direction: column;
     gap: 16px;
     background: white;
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
 }
 
 .luckysheetControls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
-    background: #f8fafc;
+    padding: 20px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
     border-bottom: 1px solid #e2e8f0;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 16px;
 }
 
 .luckysheetInfo {
     display: flex;
-    gap: 24px;
+    gap: 28px;
     align-items: center;
     flex-wrap: wrap;
 }
 
 .luckysheetInfo span {
-    font-size: 14px;
+    font-size: 15px;
     color: #64748b;
+    font-weight: 500;
 }
 
 .luckysheetInfo strong {
-    color: #374151;
-    font-weight: 600;
+    color: #1e293b;
+    font-weight: 700;
 }
 
 .luckysheetActions {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
-.luckysheetContainer {
+/* SISTEMA DE BOTONES MEJORADO */
+.button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    min-height: 44px;
+    white-space: nowrap;
     position: relative;
-    background: white;
-    min-height: 600px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-.luckysheetPlaceholder {
-    position: absolute;
-    top: 0;
+.button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.button:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+}
+
+.button ion-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.buttonPrimary {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    border: 1px solid #1d4ed8;
+}
+
+.buttonPrimary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+}
+
+.buttonPrimary:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}
+
+.buttonSecondary {
+    background: #ffffff;
+    color: #64748b;
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.buttonSecondary:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #475569;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.buttonSecondary:focus {
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.3);
+}
+
+.buttonSuccess {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+    border: 1px solid #15803d;
+}
+
+.buttonSuccess:hover:not(:disabled) {
+    background: linear-gradient(135deg, #15803d, #166534);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(22, 163, 74, 0.4);
+}
+
+.buttonSuccess:focus {
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.3);
+}
+
+.buttonInfo {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    border: 1px solid #0284c7;
+}
+
+.buttonInfo:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
+}
+
+.buttonInfo:focus {
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.3);
+}
+
+.buttonWarning {
+    background: linear-gradient(135deg, #eab308, #ca8a04);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(234, 179, 8, 0.3);
+    border: 1px solid #ca8a04;
+}
+
+.buttonWarning:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ca8a04, #a16207);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(234, 179, 8, 0.4);
+}
+
+.buttonWarning:focus {
+    box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.3);
+}
+
+.buttonDanger {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    border: 1px solid #b91c1c;
+}
+
+.buttonDanger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b91c1c, #991b1b);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.4);
+}
+
+.buttonDanger:focus {
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3);
+}
+
+.smallButton {
+    padding: 8px 16px;
+    font-size: 13px;
+    min-height: 36px;
+}
+
+/* SPINNER DE CARGA */
+.loadingSpinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* CONTENEDOR DE TABLA EXCEL */
+.excelTableWrapper {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+}
+
+.tableActions {
+    display: flex;
+    gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.tableContainer {
+    overflow: auto;
+    max-height: 600px;
+    border: 1px solid #e2e8f0;
+    background: white;
+}
+
+.tableContainer::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 6px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 6px;
+    border: 2px solid #f1f5f9;
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.tableContainer::-webkit-scrollbar-corner {
+    background: #f1f5f9;
+}
+
+/* TABLA EXCEL */
+.excelTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: white;
+    min-width: 900px;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.rowNumber {
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    color: #64748b;
+    font-weight: 700;
+    text-align: center;
+    width: 70px;
+    min-width: 70px;
+    border: 1px solid #d1d5db;
+    position: sticky;
     left: 0;
-    right: 0;
-    bottom: 0;
+    z-index: 3;
+    padding: 12px 8px;
+    font-size: 13px;
+}
+
+.rowNumber span {
+    display: block;
+    margin-bottom: 6px;
+    color: #374151;
+}
+
+.deleteRowButton {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+
+.deleteRowButton:hover {
+    opacity: 1;
+    background: #fef2f2;
+    transform: scale(1.1);
+}
+
+.deleteRowButton ion-icon {
+    font-size: 14px;
+}
+
+.columnHeader {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid #d1d5db;
+    padding: 12px;
+    min-width: 140px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.headerInput {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-weight: 700;
+    color: #1e293b;
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    text-align: center;
+}
+
+.headerInput:focus {
+    outline: none;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    color: #2563eb;
+}
+
+.headerInput:hover {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.dataCell {
+    border: 1px solid #e5e7eb;
+    padding: 4px;
+    background: white;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.dataCell:hover {
+    background: #f8fafc;
+}
+
+.cellInput {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: #374151;
+    padding: 10px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    min-height: 40px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.cellInput:focus {
+    outline: none;
+    background: #f0f9ff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    color: #1e293b;
+    transform: scale(1.02);
+}
+
+.cellInput:hover {
+    background: #f8fafc;
+}
+
+.cellInput::placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* ESTADOS VACIOS */
+.emptyRow {
+    text-align: center;
+    padding: 60px 20px;
+    border: 1px solid #e2e8f0;
+}
+
+.emptyMessage {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    background: #f9fafb;
+    gap: 16px;
     color: #6b7280;
-    z-index: 1;
 }
 
-.luckysheetPlaceholder ion-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
+.emptyMessage ion-icon {
+    font-size: 64px;
     color: #cbd5e1;
+    opacity: 0.8;
 }
 
-.luckysheetPlaceholder p {
-    font-size: 16px;
+.emptyMessage p {
     margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* INFORMACION DE TABLA */
+.tableInfo {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-top: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tableInfo ion-icon {
+    color: #3b82f6;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.tableInfo p {
+    margin: 0;
+    line-height: 1.6;
     font-weight: 500;
 }
 
+/* ESTADOS DE ERROR */
 .excelError {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 400px;
-    gap: 16px;
+    gap: 20px;
     color: #dc2626;
     text-align: center;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 8px;
-    padding: 32px;
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border: 2px solid #fecaca;
+    border-radius: 12px;
+    padding: 40px;
+    margin: 20px;
 }
 
 .excelError ion-icon {
-    font-size: 48px;
+    font-size: 64px;
     color: #ef4444;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 
 .excelError p {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     margin: 0;
     color: #dc2626;
 }
 
 .excelError span {
-    font-size: 14px;
+    font-size: 16px;
     color: #991b1b;
-    max-width: 400px;
-    line-height: 1.5;
+    max-width: 500px;
+    line-height: 1.6;
+    font-weight: 500;
 }
 
-/* Sobrescribir estilos de Luckysheet para mejor integración */
-.luckysheetContainer .luckysheet-wa-editor {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+.errorButtons {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
-.luckysheetContainer .luckysheet-toolbar {
-    background: #f1f5f9 !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    padding: 8px !important;
-}
-
-.luckysheetContainer .luckysheet-toolbar .toolbar-button {
-    color: #475569 !important;
-    border-radius: 4px !important;
-    transition: all 0.2s ease !important;
-}
-
-.luckysheetContainer .luckysheet-toolbar .toolbar-button:hover {
-    background: #e2e8f0 !important;
-    color: #1e293b !important;
-}
-
-.luckysheetContainer .luckysheet-sheet-container {
-    background: #ffffff !important;
-}
-
-.luckysheetContainer .luckysheet-cell-selected {
-    border: 2px solid #3b82f6 !important;
-    box-shadow: 0 0 0 1px #3b82f6 !important;
-}
-
-.luckysheetContainer .luckysheet-selection-copy {
-    border: 2px dashed #10b981 !important;
-}
-
-.luckysheetContainer .luckysheet-cell-main {
-    border-color: #f1f5f9 !important;
-}
-
-.luckysheetContainer .luckysheet-cell-main:hover {
-    background: #f8fafc !important;
-}
-
-/* Mejorar la apariencia de la barra de fórmulas */
-.luckysheetContainer .luckysheet-wa-calculate {
-    background: white !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-
-.luckysheetContainer .luckysheet-wa-calculate-item {
-    border-color: #e2e8f0 !important;
-}
-
-/* Estilizar los menús contextuales */
-.luckysheetContainer .luckysheet-menuButton {
-    background: white !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 6px !important;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-}
-
-.luckysheetContainer .luckysheet-menuButton .luckysheet-menuButton-item:hover {
-    background: #f8fafc !important;
-    color: #1e293b !important;
-}
-
-/* Responsive para dispositivos móviles */
-@media (max-width: 768px) {
-    .luckysheetControls {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 16px;
-    }
-    
-    .luckysheetInfo {
-        justify-content: center;
-        gap: 16px;
-    }
-    
-    .luckysheetActions {
-        justify-content: center;
-        width: 100%;
-    }
-    
-    .luckysheetActions .button {
-        flex: 1;
-        max-width: 200px;
-    }
-    
-    .luckysheetContainer {
-        height: 500px !important;
-        min-height: 500px !important;
-    }
-    
-    .excelError {
-        padding: 24px 16px;
-    }
-    
-    .excelError span {
-        font-size: 13px;
-    }
-}
-
-@media (max-width: 640px) {
-    .luckysheetContainer {
-        height: 400px !important;
-        min-height: 400px !important;
-    }
-    
-    .luckysheetInfo {
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .luckysheetInfo span {
-        font-size: 13px;
-    }
-}
-
-/* Asegurar que Luckysheet no interfiera con otros estilos */
-.luckysheetContainer .luckysheet-icon {
-    background-image: url('https://cdn.luckysheet.com/luckysheet/0.2.61/assets/iconfont/iconfont.css') !important;
-}
-
-/* Loading específico para Luckysheet */
-.luckysheetWrapper .loadingSpinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid #f3f4f6;
-    border-top: 2px solid #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-/* Estados de carga y error */
-.luckysheetWrapper[data-loading="true"] {
-    opacity: 0.7;
-    pointer-events: none;
-}
-
-.luckysheetWrapper[data-error="true"] .luckysheetContainer {
-    background: #fef2f2;
-    border-color: #fecaca;
-}
-
-/* Personalización adicional para mejor UX */
-.luckysheetContainer .luckysheet-scrollbar {
-    background: #f8fafc !important;
-}
-
-.luckysheetContainer .luckysheet-scrollbar:hover {
-    background: #e2e8f0 !important;
-}
-
-.luckysheetContainer .luckysheet-scrollbar-thumb {
-    background: #cbd5e1 !important;
-    border-radius: 4px !important;
-}
-
-.luckysheetContainer .luckysheet-scrollbar-thumb:hover {
-    background: #94a3b8 !important;
-}
-
-
-/* AGREGAR AL FINAL DE googlesheet.module.css */
-
+/* PLACEHOLDERS Y LOADING */
 .luckysheetPlaceholder {
     position: absolute;
     top: 0;
@@ -291,299 +504,67 @@
     background: rgba(248, 250, 252, 0.95);
     color: #6b7280;
     z-index: 10;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(4px);
 }
 
 .luckysheetPlaceholder .loadingSpinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid #f3f4f6;
-    border-top: 3px solid #3b82f6;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f4f6;
+    border-top: 4px solid #3b82f6;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .luckysheetPlaceholder p {
-    font-size: 16px;
+    font-size: 18px;
     margin: 0;
-    font-weight: 500;
-    text-align: center;
-}
-
-.excelError .button {
-    margin-top: 16px;
-}
-
-/* ESTILOS ADICIONALES PARA FALLBACK Y ERRORES - AGREGAR AL FINAL */
-
-.errorButtons {
-    display: flex;
-    gap: 12px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.simpleTableContainer {
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    padding: 16px;
-    background: white;
-}
-
-.simpleTableMessage {
-    margin: 0 0 16px 0;
-    padding: 12px;
-    background: #dbeafe;
-    border: 1px solid #3b82f6;
-    border-radius: 6px;
-    color: #1e40af;
-    font-size: 14px;
-    text-align: center;
-}
-
-.simpleTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    background: white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.simpleTable th {
-    background: #f8fafc;
-    color: #374151;
     font-weight: 600;
-    padding: 12px 8px;
-    text-align: left;
-    border: 1px solid #e2e8f0;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    text-align: center;
 }
 
-.simpleTable td {
-    padding: 8px;
-    border: 1px solid #e2e8f0;
-    color: #64748b;
-    background: white;
-    transition: background-color 0.2s ease;
-}
-
-.simpleTable td:focus {
-    background: #f0f9ff;
-    outline: 2px solid #3b82f6;
-    color: #1e293b;
-}
-
-.simpleTable tr:hover td {
-    background: #f8fafc;
-}
-
-@media (max-width: 768px) {
-    .errorButtons {
+/* RESPONSIVE DESIGN */
+@media (max-width: 1024px) {
+    .luckysheetControls {
         flex-direction: column;
         align-items: stretch;
+        gap: 16px;
     }
     
-    .simpleTable {
-        font-size: 13px;
+    .luckysheetInfo {
+        justify-content: center;
+        gap: 20px;
     }
     
-    .simpleTable th,
-    .simpleTable td {
-        padding: 6px 4px;
+    .luckysheetActions {
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .tableContainer {
+        max-height: 500px;
+    }
+    
+    .excelTable {
+        min-width: 700px;
     }
 }
 
-/* ESTILOS PARA EDITOR EXCEL PERSONALIZADO - AGREGAR AL FINAL */
-
-.excelTableWrapper {
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.tableActions {
-    display: flex;
-    gap: 12px;
-    padding: 16px;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.smallButton {
-    padding: 6px 12px;
-    font-size: 13px;
-    min-height: auto;
-}
-
-.tableContainer {
-    overflow: auto;
-    max-height: 500px;
-    border: 1px solid #e2e8f0;
-}
-
-.excelTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    background: white;
-    min-width: 800px;
-}
-
-.rowNumber {
-    background: #f1f5f9;
-    color: #64748b;
-    font-weight: 600;
-    text-align: center;
-    width: 60px;
-    min-width: 60px;
-    border: 1px solid #e2e8f0;
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    padding: 8px 4px;
-}
-
-.rowNumber span {
-    display: block;
-    margin-bottom: 4px;
-}
-
-.deleteRowButton {
-    background: none;
-    border: none;
-    color: #ef4444;
-    cursor: pointer;
-    padding: 2px;
-    border-radius: 3px;
-    opacity: 0.7;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.deleteRowButton:hover {
-    opacity: 1;
-    background: #fef2f2;
-}
-
-.deleteRowButton ion-icon {
-    font-size: 12px;
-}
-
-.columnHeader {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    padding: 8px;
-    min-width: 120px;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-.headerInput {
-    width: 100%;
-    border: none;
-    background: transparent;
-    font-weight: 600;
-    color: #374151;
-    padding: 4px;
-    border-radius: 3px;
-    transition: background-color 0.2s ease;
-}
-
-.headerInput:focus {
-    outline: none;
-    background: white;
-    box-shadow: 0 0 0 2px #3b82f6;
-}
-
-.dataCell {
-    border: 1px solid #e2e8f0;
-    padding: 4px;
-    background: white;
-    transition: background-color 0.2s ease;
-}
-
-.cellInput {
-    width: 100%;
-    border: none;
-    background: transparent;
-    color: #374151;
-    padding: 6px 8px;
-    border-radius: 3px;
-    transition: all 0.2s ease;
-    min-height: 32px;
-}
-
-.cellInput:focus {
-    outline: none;
-    background: #f0f9ff;
-    box-shadow: 0 0 0 2px #3b82f6;
-}
-
-.cellInput:hover {
-    background: #f8fafc;
-}
-
-.emptyRow {
-    text-align: center;
-    padding: 40px 20px;
-    border: 1px solid #e2e8f0;
-}
-
-.emptyMessage {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    color: #6b7280;
-}
-
-.emptyMessage ion-icon {
-    font-size: 48px;
-    color: #cbd5e1;
-}
-
-.emptyMessage p {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 500;
-}
-
-.tableInfo {
-    padding: 16px;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
-    color: #64748b;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tableInfo ion-icon {
-    color: #3b82f6;
-    font-size: 16px;
-    flex-shrink: 0;
-}
-
-.tableInfo p {
-    margin: 0;
-    line-height: 1.5;
-}
-
-/* Responsive */
 @media (max-width: 768px) {
+    .luckysheetWrapper {
+        margin: 16px;
+        border-radius: 8px;
+    }
+    
+    .luckysheetControls {
+        padding: 16px;
+    }
+    
     .tableActions {
         flex-direction: column;
-        gap: 8px;
+        gap: 12px;
+        padding: 16px;
     }
     
     .tableContainer {
@@ -592,45 +573,216 @@
     
     .excelTable {
         min-width: 600px;
+        font-size: 13px;
     }
     
     .rowNumber {
         width: 50px;
         min-width: 50px;
+        padding: 8px 4px;
     }
     
     .columnHeader {
         min-width: 100px;
+        padding: 8px;
     }
     
     .cellInput {
         font-size: 13px;
-        min-height: 28px;
-        padding: 4px 6px;
+        min-height: 36px;
+        padding: 8px 10px;
     }
     
     .headerInput {
         font-size: 13px;
+        padding: 6px;
     }
     
     .tableInfo {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+        padding: 16px;
+    }
+    
+    .button {
+        padding: 10px 16px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+    
+    .smallButton {
+        padding: 6px 12px;
+        font-size: 12px;
+        min-height: 32px;
+    }
+    
+    .errorButtons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .excelError {
+        padding: 24px 16px;
+        margin: 16px;
+    }
+    
+    .excelError p {
+        font-size: 18px;
+    }
+    
+    .excelError span {
+        font-size: 14px;
     }
 }
 
 @media (max-width: 640px) {
+    .luckysheetInfo {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .luckysheetInfo span {
+        font-size: 14px;
+    }
+    
     .excelTable {
         min-width: 500px;
+        font-size: 12px;
     }
     
     .columnHeader {
         min-width: 80px;
+        padding: 6px;
     }
     
     .cellInput {
         font-size: 12px;
-        min-height: 24px;
+        min-height: 32px;
+        padding: 6px 8px;
+    }
+    
+    .headerInput {
+        font-size: 12px;
+        padding: 4px;
+    }
+    
+    .deleteRowButton {
+        width: 20px;
+        height: 20px;
+        padding: 2px;
+    }
+    
+    .deleteRowButton ion-icon {
+        font-size: 12px;
+    }
+    
+    .emptyMessage p {
+        font-size: 16px;
+    }
+    
+    .emptyMessage ion-icon {
+        font-size: 48px;
+    }
+}
+
+/* ANIMACIONES Y EFECTOS */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.luckysheetWrapper {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.excelTableWrapper {
+    animation: slideIn 0.4s ease-out;
+}
+
+/* ESTADOS ADICIONALES */
+.luckysheetWrapper[data-loading="true"] {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.luckysheetWrapper[data-error="true"] .tableContainer {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+/* MEJORAS DE ACCESIBILIDAD */
+.button:focus-visible {
+    outline: 3px solid;
+    outline-offset: 2px;
+}
+
+.buttonPrimary:focus-visible {
+    outline-color: rgba(37, 99, 235, 0.5);
+}
+
+.buttonSecondary:focus-visible {
+    outline-color: rgba(148, 163, 184, 0.5);
+}
+
+.buttonSuccess:focus-visible {
+    outline-color: rgba(22, 163, 74, 0.5);
+}
+
+.buttonInfo:focus-visible {
+    outline-color: rgba(14, 165, 233, 0.5);
+}
+
+.buttonWarning:focus-visible {
+    outline-color: rgba(234, 179, 8, 0.5);
+}
+
+.buttonDanger:focus-visible {
+    outline-color: rgba(220, 38, 38, 0.5);
+}
+
+.cellInput:focus-visible,
+.headerInput:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 1px;
+}
+
+/* PRINT STYLES */
+@media print {
+    .luckysheetControls,
+    .tableActions,
+    .tableInfo {
+        display: none;
+    }
+    
+    .tableContainer {
+        max-height: none;
+        overflow: visible;
+    }
+    
+    .excelTable {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .button {
+        display: none;
     }
 }
