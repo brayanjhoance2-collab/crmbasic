@@ -268,7 +268,7 @@ export async function eliminarConfiguracionInstagram() {
     }
 }
 
-// Función corregida para validar configuración de Instagram
+// Reemplaza tu función validarConfiguracionInstagram con esta versión corregida
 async function validarConfiguracionInstagram(accessToken, businessId) {
     try {
         // Validar formato básico
@@ -299,8 +299,7 @@ async function validarConfiguracionInstagram(accessToken, businessId) {
             }
         }
 
-        // Si no hay business ID, intentar obtener información básica del token
-        // Usar debug_token para validar el token
+        // Si no hay business ID, usar debug_token para validar el token
         const debugResponse = await fetch(
             `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${accessToken}`
         )
