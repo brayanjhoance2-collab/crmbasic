@@ -641,7 +641,7 @@
 }
 
 .numerosLista {
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
@@ -662,25 +662,31 @@
     border-radius: 3px;
 }
 
-.numeroItem {
+.numeroItemManual {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.75rem;
-    padding: 0.75rem;
+    padding: 1rem;
     border-bottom: 1px solid #f1f5f9;
-    cursor: pointer;
     transition: all 0.15s ease-in-out;
 }
 
-.numeroItem:last-child {
+.numeroItemManual:last-child {
     border-bottom: none;
 }
 
-.numeroItem:hover {
+.numeroItemManual:hover {
     background: #f8fafc;
 }
 
-.numeroItem input[type="checkbox"] {
+.numeroCheckbox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+}
+
+.numeroCheckbox input[type="checkbox"] {
     width: 1rem;
     height: 1rem;
     accent-color: #2563eb;
@@ -703,6 +709,35 @@
 .numeroTelefono {
     font-size: 0.75rem;
     color: #64748b;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.numeroEditable {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-left: 1.75rem;
+}
+
+.inputNombre,
+.inputTelefono {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #1e293b;
+    transition: all 0.15s ease-in-out;
+    background: #ffffff;
+}
+
+.inputNombre:focus,
+.inputTelefono:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.inputTelefono {
     font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
 }
 
@@ -745,9 +780,10 @@
     font-size: 0.875rem;
     color: #1e293b;
     resize: vertical;
-    min-height: 120px;
+    min-height: 150px;
     margin-bottom: 1rem;
     transition: all 0.15s ease-in-out;
+    font-family: inherit;
 }
 
 .textareaMensaje:focus {
@@ -890,6 +926,12 @@
     color: #374151;
 }
 
+.campoFormulario small {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+}
+
 .selector,
 .input,
 .textarea {
@@ -912,7 +954,8 @@
 
 .textarea {
     resize: vertical;
-    min-height: 80px;
+    min-height: 100px;
+    font-family: inherit;
 }
 
 .checkboxLabel {
@@ -1137,5 +1180,9 @@
     
     .botonesFormulario {
         flex-direction: column-reverse;
+    }
+    
+    .numeroEditable {
+        margin-left: 0;
     }
 }

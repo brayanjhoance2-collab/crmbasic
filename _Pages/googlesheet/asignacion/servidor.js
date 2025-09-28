@@ -100,12 +100,11 @@ export async function crearAsignacion(datos) {
             sheet_name,
             columna_telefono,
             columna_nombre,
+            columna_restriccion,
             mensaje_bienvenida,
-            mensaje_seguimiento,
-            mensaje_promocional,
-            tipo_envio,
             enviar_solo_nuevos,
-            intervalo_horas
+            intervalo_horas,
+            valor_restriccion
         } = datos
 
         const [result] = await db.execute(`
@@ -115,27 +114,25 @@ export async function crearAsignacion(datos) {
                 sheet_name,
                 columna_telefono,
                 columna_nombre,
+                columna_restriccion,
                 mensaje_bienvenida,
-                mensaje_seguimiento,
-                mensaje_promocional,
-                tipo_envio,
                 enviar_solo_nuevos,
                 intervalo_horas,
+                valor_restriccion,
                 activa,
                 fecha_creacion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
         `, [
             usuario.id,
             spreadsheet_id,
             sheet_name,
             columna_telefono,
             columna_nombre || null,
+            columna_restriccion || null,
             mensaje_bienvenida,
-            mensaje_seguimiento || null,
-            mensaje_promocional || null,
-            tipo_envio,
             enviar_solo_nuevos ? 1 : 0,
-            intervalo_horas || 24
+            intervalo_horas || 24,
+            valor_restriccion || null
         ])
 
         return {
@@ -171,35 +168,32 @@ export async function actualizarAsignacion(id, datos) {
         const {
             columna_telefono,
             columna_nombre,
+            columna_restriccion,
             mensaje_bienvenida,
-            mensaje_seguimiento,
-            mensaje_promocional,
-            tipo_envio,
             enviar_solo_nuevos,
-            intervalo_horas
+            intervalo_horas,
+            valor_restriccion
         } = datos
 
         await db.execute(`
             UPDATE google_sheets_asignaciones SET
                 columna_telefono = ?,
                 columna_nombre = ?,
+                columna_restriccion = ?,
                 mensaje_bienvenida = ?,
-                mensaje_seguimiento = ?,
-                mensaje_promocional = ?,
-                tipo_envio = ?,
                 enviar_solo_nuevos = ?,
                 intervalo_horas = ?,
+                valor_restriccion = ?,
                 fecha_actualizacion = NOW()
             WHERE id = ? AND usuario_id = ?
         `, [
             columna_telefono,
             columna_nombre || null,
+            columna_restriccion || null,
             mensaje_bienvenida,
-            mensaje_seguimiento || null,
-            mensaje_promocional || null,
-            tipo_envio,
             enviar_solo_nuevos ? 1 : 0,
             intervalo_horas || 24,
+            valor_restriccion || null,
             id,
             usuario.id
         ])
@@ -332,6 +326,8 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
         const columnaHeaderTelefono = headers[asignacion.columna_telefono.charCodeAt(0) - 65]
         const columnaHeaderNombre = asignacion.columna_nombre ? 
             headers[asignacion.columna_nombre.charCodeAt(0) - 65] : null
+        const columnaHeaderRestriccion = asignacion.columna_restriccion ? 
+            headers[asignacion.columna_restriccion.charCodeAt(0) - 65] : null
 
         if (!columnaHeaderTelefono) {
             throw new Error('Columna de teléfono no válida')
@@ -344,8 +340,16 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
             const fila = datosSheet[index]
             const telefono = fila[columnaHeaderTelefono]
             const nombre = columnaHeaderNombre ? fila[columnaHeaderNombre] : `Usuario ${index + 1}`
+            const valorRestriccion = columnaHeaderRestriccion ? fila[columnaHeaderRestriccion] : null
 
             if (!telefono || telefono.trim() === '') {
+                omitidos++
+                continue
+            }
+
+            // Verificar restricción
+            if (valorRestriccion && asignacion.valor_restriccion && 
+                valorRestriccion.toString().toLowerCase().includes(asignacion.valor_restriccion.toLowerCase())) {
                 omitidos++
                 continue
             }
@@ -370,35 +374,8 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                 }
             }
 
-            // Determinar qué mensaje enviar
-            let mensajeAEnviar = ''
-            let tipoMensaje = 'bienvenida'
-
-            const [historialPrevio] = await db.execute(`
-                SELECT COUNT(*) as total FROM google_sheets_envios_historial 
-                WHERE asignacion_id = ? AND numero_telefono = ? AND estado_envio = 'enviado'
-            `, [asignacionId, telefonoLimpio])
-
-            const totalEnviosPrevios = historialPrevio[0].total
-
-            if (totalEnviosPrevios === 0) {
-                mensajeAEnviar = asignacion.mensaje_bienvenida
-                tipoMensaje = 'bienvenida'
-            } else if (totalEnviosPrevios === 1 && asignacion.mensaje_seguimiento && 
-                      (asignacion.tipo_envio === 'seguimiento' || asignacion.tipo_envio === 'promocional')) {
-                mensajeAEnviar = asignacion.mensaje_seguimiento
-                tipoMensaje = 'seguimiento'
-            } else if (totalEnviosPrevios >= 2 && asignacion.mensaje_promocional && 
-                      asignacion.tipo_envio === 'promocional') {
-                mensajeAEnviar = asignacion.mensaje_promocional
-                tipoMensaje = 'promocional'
-            } else {
-                omitidos++
-                continue
-            }
-
             // Personalizar mensaje
-            const mensajePersonalizado = mensajeAEnviar
+            const mensajePersonalizado = asignacion.mensaje_bienvenida
                 .replace(/{nombre}/g, nombre || 'Usuario')
                 .replace(/{telefono}/g, telefonoLimpio)
 
@@ -417,13 +394,12 @@ export async function procesarEnviosSheet(asignacionId, datosSheet) {
                         sheet_name,
                         fila_sheet,
                         fecha_programado
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, NOW())
+                    ) VALUES (?, ?, ?, ?, 'bienvenida', ?, 'pendiente', ?, ?, ?, NOW())
                 `, [
                     asignacionId,
                     usuario.id,
                     telefonoLimpio,
                     nombre,
-                    tipoMensaje,
                     mensajePersonalizado,
                     asignacion.spreadsheet_id,
                     asignacion.sheet_name,
@@ -507,7 +483,7 @@ export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionI
                 sheet_name,
                 fila_sheet,
                 fecha_programado
-            ) VALUES (?, ?, ?, ?, 'personalizado', ?, 'pendiente', 'manual', 'manual', 0, NOW())
+            ) VALUES (?, ?, ?, ?, 'manual', ?, 'pendiente', 'manual', 'manual', 0, NOW())
         `, [
             asignacionId || null,
             usuario.id,
@@ -553,35 +529,6 @@ export async function enviarMensajeManual(telefono, mensaje, nombre, asignacionI
             success: false,
             error: error.message
         }
-    }
-}
-
-export async function obtenerColumnasSheet(spreadsheetId, sheetName) {
-    try {
-        const usuario = await obtenerUsuarioActual()
-        if (!usuario) {
-            throw new Error('Usuario no autenticado')
-        }
-
-        // Importar función del módulo de Google Sheets
-        const { obtenerDatosSheet } = await import('../googlesheet/servidor')
-        
-        const datos = await obtenerDatosSheet(spreadsheetId, sheetName)
-        
-        if (datos.length === 0) {
-            return []
-        }
-
-        const headers = Object.keys(datos[0])
-        return headers.map((header, index) => ({
-            letra: String.fromCharCode(65 + index),
-            nombre: header,
-            muestra: datos[0][header] || ''
-        }))
-
-    } catch (error) {
-        console.log('Error al obtener columnas del sheet:', error)
-        throw error
     }
 }
 

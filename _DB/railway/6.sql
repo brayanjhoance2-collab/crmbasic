@@ -1,5 +1,5 @@
 -- ============================================================================
--- TABLA PARA ASIGNACIÓN DE MENSAJES AUTOMÁTICOS DESDE GOOGLE SHEETS - CORREGIDA
+-- TABLA PARA ASIGNACIÓN DE MENSAJES AUTOMÁTICOS DESDE GOOGLE SHEETS - SIMPLIFICADA
 -- ============================================================================
 
 USE railway;
@@ -18,16 +18,15 @@ CREATE TABLE google_sheets_asignaciones (
     sheet_name VARCHAR(255) NOT NULL,
     columna_telefono VARCHAR(10) NOT NULL, -- A, B, C, etc.
     columna_nombre VARCHAR(10) NULL,
+    columna_restriccion VARCHAR(10) NULL, -- Columna para restringir envíos (ej: si tiene "NO" no enviar)
     
-    -- Configuración de mensajes
+    -- Configuración de mensajes (solo bienvenida)
     mensaje_bienvenida TEXT NOT NULL,
-    mensaje_seguimiento TEXT NULL,
-    mensaje_promocional TEXT NULL,
     
     -- Configuración de envío
-    tipo_envio ENUM('bienvenida', 'seguimiento', 'promocional', 'personalizado') DEFAULT 'bienvenida',
     enviar_solo_nuevos BOOLEAN DEFAULT 1,
     intervalo_horas INT DEFAULT 24, -- Intervalo mínimo entre mensajes
+    valor_restriccion VARCHAR(50) NULL, -- Valor que indica NO enviar (ej: "NO", "ENVIADO", etc.)
     
     -- Estado
     activa BOOLEAN DEFAULT 1,
@@ -50,7 +49,7 @@ CREATE TABLE google_sheets_asignaciones (
 -- Tabla para historial de envíos
 CREATE TABLE google_sheets_envios_historial (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    asignacion_id INT NOT NULL,
+    asignacion_id INT NULL,
     usuario_id INT NOT NULL,
     
     -- Información del destinatario
@@ -58,7 +57,7 @@ CREATE TABLE google_sheets_envios_historial (
     nombre_destinatario VARCHAR(255) NULL,
     
     -- Información del mensaje
-    tipo_mensaje ENUM('bienvenida', 'seguimiento', 'promocional', 'personalizado') NOT NULL,
+    tipo_mensaje ENUM('bienvenida', 'manual') NOT NULL,
     contenido_mensaje TEXT NOT NULL,
     
     -- Estado del envío
@@ -88,7 +87,7 @@ CREATE TABLE google_sheets_envios_historial (
     INDEX idx_spreadsheet (spreadsheet_id),
     INDEX idx_fecha_programado (fecha_programado),
     
-    -- Índice compuesto para evitar envíos duplicados (sin función DATE)
+    -- Índice compuesto para evitar envíos duplicados
     INDEX idx_envio_duplicado (asignacion_id, numero_telefono, tipo_mensaje, fecha_programado)
 ) ENGINE=InnoDB;
 
@@ -99,9 +98,9 @@ INSERT INTO google_sheets_asignaciones (
     sheet_name,
     columna_telefono,
     columna_nombre,
+    columna_restriccion,
     mensaje_bienvenida,
-    mensaje_seguimiento,
-    tipo_envio,
+    valor_restriccion,
     enviar_solo_nuevos
 ) 
 SELECT 
@@ -110,9 +109,9 @@ SELECT
     'Contactos',
     'D',
     'B',
+    'E',
     'Hola {nombre}, bienvenido a nuestro servicio. Estamos aquí para ayudarte.',
-    'Hola {nombre}, queremos saber cómo ha sido tu experiencia con nosotros.',
-    'bienvenida',
+    'NO',
     1
 WHERE EXISTS (SELECT 1 FROM usuarios WHERE id = 1 LIMIT 1);
 

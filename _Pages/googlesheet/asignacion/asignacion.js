@@ -10,7 +10,6 @@ import {
     eliminarAsignacion,
     obtenerHistorialEnvios,
     procesarEnviosSheet,
-    obtenerColumnasSheet,
     enviarMensajeManual,
     obtenerEstadisticasEnvios
 } from "./servidor"
@@ -39,18 +38,16 @@ export default function AsignacionComponent({
     const [formAsignacion, setFormAsignacion] = useState({
         columna_telefono: '',
         columna_nombre: '',
+        columna_restriccion: '',
         mensaje_bienvenida: '',
-        mensaje_seguimiento: '',
-        mensaje_promocional: '',
-        tipo_envio: 'bienvenida',
         enviar_solo_nuevos: true,
-        intervalo_horas: 24
+        intervalo_horas: 24,
+        valor_restriccion: 'NO'
     })
     
     const [formEnvioManual, setFormEnvioManual] = useState({
-        numeros_seleccionados: [],
-        mensaje_personalizado: '',
-        tipo_mensaje: 'personalizado'
+        destinatarios: [],
+        mensaje_personalizado: ''
     })
     
     // Estados de control
@@ -134,23 +131,21 @@ export default function AsignacionComponent({
             setFormAsignacion({
                 columna_telefono: asignacion.columna_telefono || '',
                 columna_nombre: asignacion.columna_nombre || '',
+                columna_restriccion: asignacion.columna_restriccion || '',
                 mensaje_bienvenida: asignacion.mensaje_bienvenida || '',
-                mensaje_seguimiento: asignacion.mensaje_seguimiento || '',
-                mensaje_promocional: asignacion.mensaje_promocional || '',
-                tipo_envio: asignacion.tipo_envio || 'bienvenida',
                 enviar_solo_nuevos: asignacion.enviar_solo_nuevos || true,
-                intervalo_horas: asignacion.intervalo_horas || 24
+                intervalo_horas: asignacion.intervalo_horas || 24,
+                valor_restriccion: asignacion.valor_restriccion || 'NO'
             })
         } else {
             setFormAsignacion({
                 columna_telefono: '',
                 columna_nombre: '',
+                columna_restriccion: '',
                 mensaje_bienvenida: 'Hola {nombre}, bienvenido a nuestro servicio. Estamos aquí para ayudarte.',
-                mensaje_seguimiento: 'Hola {nombre}, queremos saber cómo ha sido tu experiencia con nosotros.',
-                mensaje_promocional: 'Hola {nombre}, tenemos una oferta especial para ti.',
-                tipo_envio: 'bienvenida',
                 enviar_solo_nuevos: true,
-                intervalo_horas: 24
+                intervalo_horas: 24,
+                valor_restriccion: 'NO'
             })
         }
         
@@ -263,7 +258,25 @@ export default function AsignacionComponent({
         if (!datosSheet || datosSheet.length === 0) return []
         
         const asignacion = asignaciones[0]
-        if (!asignacion) return []
+        if (!asignacion) {
+            // Si no hay asignación, mostrar todos los números disponibles
+            const headers = Object.keys(datosSheet[0])
+            return datosSheet.map((fila, index) => {
+                const telefono = Object.values(fila).find(val => 
+                    val && typeof val === 'string' && /\d{10,}/.test(val.replace(/\D/g, ''))
+                ) || ''
+                const nombre = Object.values(fila).find(val => 
+                    val && typeof val === 'string' && !/^\d+$/.test(val)
+                ) || `Usuario ${index + 1}`
+                
+                return {
+                    index: index,
+                    telefono: telefono,
+                    nombre: nombre,
+                    fila: fila
+                }
+            }).filter(item => item.telefono && item.telefono.trim() !== '')
+        }
         
         const columnaHeaderTelefono = columnasDisponibles.find(col => col.letra === asignacion.columna_telefono)?.nombre
         const columnaHeaderNombre = columnasDisponibles.find(col => col.letra === asignacion.columna_nombre)?.nombre
@@ -273,7 +286,8 @@ export default function AsignacionComponent({
         return datosSheet.map((fila, index) => ({
             index: index,
             telefono: fila[columnaHeaderTelefono] || '',
-            nombre: columnaHeaderNombre ? (fila[columnaHeaderNombre] || '') : `Usuario ${index + 1}`
+            nombre: columnaHeaderNombre ? (fila[columnaHeaderNombre] || '') : `Usuario ${index + 1}`,
+            fila: fila
         })).filter(item => item.telefono && item.telefono.trim() !== '')
     }
 
@@ -339,7 +353,7 @@ export default function AsignacionComponent({
             <div className={estilos.headerSection}>
                 <div className={estilos.titleContainer}>
                     <h2>Mensajes Automáticos WhatsApp</h2>
-                    <p>Configura envío de mensajes desde Google Sheets a WhatsApp</p>
+                    <p>Configura envío de mensajes de bienvenida desde Google Sheets a WhatsApp</p>
                 </div>
 
                 <div className={estilos.navegacionSecciones}>
@@ -373,7 +387,7 @@ export default function AsignacionComponent({
             {seccionActiva === 'asignaciones' && (
                 <div className={estilos.seccionContent}>
                     <div className={estilos.seccionHeader}>
-                        <h3>Configuración de Mensajes</h3>
+                        <h3>Configuración de Mensajes de Bienvenida</h3>
                         <button 
                             className={estilos.botonNuevo}
                             onClick={() => abrirModalAsignacion('nueva')}
@@ -413,23 +427,24 @@ export default function AsignacionComponent({
                                                     </span>
                                                 </div>
                                             )}
-                                        </div>
-
-                                        <div className={estilos.mensajesPreview}>
-                                            <div className={estilos.mensajeItem}>
-                                                <strong>Bienvenida:</strong>
-                                                <p>{asignacion.mensaje_bienvenida?.substring(0, 100)}...</p>
-                                            </div>
-                                            {asignacion.mensaje_seguimiento && (
-                                                <div className={estilos.mensajeItem}>
-                                                    <strong>Seguimiento:</strong>
-                                                    <p>{asignacion.mensaje_seguimiento?.substring(0, 100)}...</p>
+                                            {asignacion.columna_restriccion && (
+                                                <div className={estilos.columnaItem}>
+                                                    <span className={estilos.columnaLabel}>Restricción:</span>
+                                                    <span className={estilos.columnaValue}>
+                                                        Columna {asignacion.columna_restriccion} - No enviar si contiene "{asignacion.valor_restriccion}"
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
 
+                                        <div className={estilos.mensajesPreview}>
+                                            <div className={estilos.mensajeItem}>
+                                                <strong>Mensaje de Bienvenida:</strong>
+                                                <p>{asignacion.mensaje_bienvenida?.substring(0, 150)}...</p>
+                                            </div>
+                                        </div>
+
                                         <div className={estilos.configuracionInfo}>
-                                            <span>Tipo: <strong>{asignacion.tipo_envio}</strong></span>
                                             <span>Intervalo: <strong>{asignacion.intervalo_horas}h</strong></span>
                                             <span>Solo nuevos: <strong>{asignacion.enviar_solo_nuevos ? 'Sí' : 'No'}</strong></span>
                                         </div>
@@ -494,7 +509,7 @@ export default function AsignacionComponent({
                         <div className={estilos.emptyState}>
                             <ion-icon name="chatbubbles-outline"></ion-icon>
                             <h3>No hay asignaciones configuradas</h3>
-                            <p>Crea tu primera asignación para enviar mensajes automáticos a WhatsApp</p>
+                            <p>Crea tu primera asignación para enviar mensajes automáticos de bienvenida a WhatsApp</p>
                             <button 
                                 className={estilos.botonCrearPrimero}
                                 onClick={() => abrirModalAsignacion('nueva')}
@@ -550,7 +565,7 @@ export default function AsignacionComponent({
                                                     {envio.error_envio}
                                                 </div>
                                             )}
-                                        </div>
+                                            </div>
                                     </div>
                                     <div className={estilos.historialEstado}>
                                         <span className={`${estilos.estadoBadge} ${estilos[envio.estado_envio]}`}>
@@ -585,29 +600,76 @@ export default function AsignacionComponent({
                                 <h4>Seleccionar destinatarios:</h4>
                                 <div className={estilos.numerosLista}>
                                     {obtenerNumerosDisponibles().map(item => (
-                                        <label key={item.index} className={estilos.numeroItem}>
-                                            <input
-                                                type="checkbox"
-                                                checked={formEnvioManual.numeros_seleccionados.includes(item.index)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setFormEnvioManual({
-                                                            ...formEnvioManual,
-                                                            numeros_seleccionados: [...formEnvioManual.numeros_seleccionados, item.index]
-                                                        })
-                                                    } else {
-                                                        setFormEnvioManual({
-                                                            ...formEnvioManual,
-                                                            numeros_seleccionados: formEnvioManual.numeros_seleccionados.filter(i => i !== item.index)
-                                                        })
+                                        <div key={item.index} className={estilos.numeroItemManual}>
+                                            <label className={estilos.numeroCheckbox}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formEnvioManual.destinatarios.some(d => d.index === item.index)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setFormEnvioManual({
+                                                                ...formEnvioManual,
+                                                                destinatarios: [...formEnvioManual.destinatarios, {
+                                                                    index: item.index,
+                                                                    telefono: item.telefono,
+                                                                    nombre: item.nombre
+                                                                }]
+                                                            })
+                                                        } else {
+                                                            setFormEnvioManual({
+                                                                ...formEnvioManual,
+                                                                destinatarios: formEnvioManual.destinatarios.filter(d => d.index !== item.index)
+                                                            })
+                                                        }
+                                                    }}
+                                                />
+                                                <div className={estilos.numeroInfo}>
+                                                    <span className={estilos.numeroNombre}>{item.nombre}</span>
+                                                    <span className={estilos.numeroTelefono}>{formatearTelefono(item.telefono)}</span>
+                                                </div>
+                                            </label>
+                                            
+                                            <div className={estilos.numeroEditable}>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.nombre || item.nombre
                                                     }
-                                                }}
-                                            />
-                                            <div className={estilos.numeroInfo}>
-                                                <span className={estilos.numeroNombre}>{item.nombre}</span>
-                                                <span className={estilos.numeroTelefono}>{formatearTelefono(item.telefono)}</span>
+                                                    onChange={(e) => {
+                                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
+                                                            d.index === item.index ? {...d, nombre: e.target.value} : d
+                                                        )
+                                                        if (destinatarios.some(d => d.index === item.index)) {
+                                                            setFormEnvioManual({
+                                                                ...formEnvioManual,
+                                                                destinatarios
+                                                            })
+                                                        }
+                                                    }}
+                                                    placeholder="Nombre personalizado"
+                                                    className={estilos.inputNombre}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        formEnvioManual.destinatarios.find(d => d.index === item.index)?.telefono || item.telefono
+                                                    }
+                                                    onChange={(e) => {
+                                                        const destinatarios = formEnvioManual.destinatarios.map(d => 
+                                                            d.index === item.index ? {...d, telefono: e.target.value} : d
+                                                        )
+                                                        if (destinatarios.some(d => d.index === item.index)) {
+                                                            setFormEnvioManual({
+                                                                ...formEnvioManual,
+                                                                destinatarios
+                                                            })
+                                                        }
+                                                    }}
+                                                    placeholder="Número de teléfono"
+                                                    className={estilos.inputTelefono}
+                                                />
                                             </div>
-                                        </label>
+                                        </div>
                                     ))}
                                 </div>
                                 
@@ -615,10 +677,14 @@ export default function AsignacionComponent({
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            const todosIndices = obtenerNumerosDisponibles().map(item => item.index)
+                                            const todosDestinataarios = obtenerNumerosDisponibles().map(item => ({
+                                                index: item.index,
+                                                telefono: item.telefono,
+                                                nombre: item.nombre
+                                            }))
                                             setFormEnvioManual({
                                                 ...formEnvioManual,
-                                                numeros_seleccionados: todosIndices
+                                                destinatarios: todosDestinataarios
                                             })
                                         }}
                                         className={estilos.botonSeleccionarTodos}
@@ -631,7 +697,7 @@ export default function AsignacionComponent({
                                         onClick={() => {
                                             setFormEnvioManual({
                                                 ...formEnvioManual,
-                                                numeros_seleccionados: []
+                                                destinatarios: []
                                             })
                                         }}
                                         className={estilos.botonLimpiarSeleccion}
@@ -650,18 +716,18 @@ export default function AsignacionComponent({
                                         mensaje_personalizado: e.target.value
                                     })}
                                     placeholder="Escribe tu mensaje personalizado aquí. Puedes usar {nombre} para personalizar."
-                                    rows="4"
+                                    rows="6"
                                     className={estilos.textareaMensaje}
                                 />
                                 
                                 <div className={estilos.variablesInfo}>
                                     <span>Variables disponibles: {'{nombre}'}</span>
-                                    <span>Seleccionados: {formEnvioManual.numeros_seleccionados.length}</span>
+                                    <span>Seleccionados: {formEnvioManual.destinatarios.length}</span>
                                 </div>
                                 
                                 <button
                                     onClick={async () => {
-                                        if (formEnvioManual.numeros_seleccionados.length === 0) {
+                                        if (formEnvioManual.destinatarios.length === 0) {
                                             setMensajeError('Selecciona al menos un destinatario')
                                             return
                                         }
@@ -675,21 +741,18 @@ export default function AsignacionComponent({
                                             setEnviandoMensajes(true)
                                             setMensajeError('')
                                             
-                                            const numerosSeleccionados = obtenerNumerosDisponibles()
-                                                .filter(item => formEnvioManual.numeros_seleccionados.includes(item.index))
-                                            
                                             let enviados = 0
                                             let errores = 0
                                             
-                                            for (const numero of numerosSeleccionados) {
+                                            for (const destinatario of formEnvioManual.destinatarios) {
                                                 try {
                                                     const mensajePersonalizado = formEnvioManual.mensaje_personalizado
-                                                        .replace(/{nombre}/g, numero.nombre || 'Usuario')
+                                                        .replace(/{nombre}/g, destinatario.nombre || 'Usuario')
                                                     
                                                     const resultado = await enviarMensajeManual(
-                                                        numero.telefono,
+                                                        destinatario.telefono,
                                                         mensajePersonalizado,
-                                                        numero.nombre,
+                                                        destinatario.nombre,
                                                         asignaciones[0]?.id
                                                     )
                                                     
@@ -701,13 +764,15 @@ export default function AsignacionComponent({
                                                 } catch (error) {
                                                     errores++
                                                 }
+                                                
+                                                // Pausa entre envíos
+                                                await new Promise(resolve => setTimeout(resolve, 1000))
                                             }
                                             
                                             setMensajeExito(`Envío completado: ${enviados} enviados, ${errores} errores`)
                                             setFormEnvioManual({
-                                                numeros_seleccionados: [],
-                                                mensaje_personalizado: '',
-                                                tipo_mensaje: 'personalizado'
+                                                destinatarios: [],
+                                                mensaje_personalizado: ''
                                             })
                                             
                                             await cargarDatosAsignaciones()
@@ -719,7 +784,7 @@ export default function AsignacionComponent({
                                             setEnviandoMensajes(false)
                                         }
                                     }}
-                                    disabled={enviandoMensajes || formEnvioManual.numeros_seleccionados.length === 0}
+                                    disabled={enviandoMensajes || formEnvioManual.destinatarios.length === 0}
                                     className={estilos.botonEnviarManual}
                                 >
                                     {enviandoMensajes ? (
@@ -730,7 +795,7 @@ export default function AsignacionComponent({
                                     ) : (
                                         <>
                                             <ion-icon name="send-outline"></ion-icon>
-                                            Enviar a {formEnvioManual.numeros_seleccionados.length} destinatarios
+                                            Enviar a {formEnvioManual.destinatarios.length} destinatarios
                                         </>
                                     )}
                                 </button>
@@ -797,10 +862,40 @@ export default function AsignacionComponent({
                                             </select>
                                         </div>
                                     </div>
+
+                                    <div className={estilos.camposGrupo}>
+                                        <div className={estilos.campoFormulario}>
+                                            <label>Columna de Restricción (opcional)</label>
+                                            <select
+                                                value={formAsignacion.columna_restriccion}
+                                                onChange={(e) => setFormAsignacion({...formAsignacion, columna_restriccion: e.target.value})}
+                                                className={estilos.selector}
+                                            >
+                                                <option value="">Sin restricción</option>
+                                                {columnasDisponibles.map(col => (
+                                                    <option key={col.letra} value={col.letra}>
+                                                        Columna {col.letra} - {col.nombre} (ej: {col.muestra})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className={estilos.campoFormulario}>
+                                            <label>Valor que restringe envío</label>
+                                            <input
+                                                type="text"
+                                                value={formAsignacion.valor_restriccion}
+                                                onChange={(e) => setFormAsignacion({...formAsignacion, valor_restriccion: e.target.value})}
+                                                placeholder="Ej: NO, ENVIADO, BLOQUEADO"
+                                                className={estilos.input}
+                                            />
+                                            <small>Si la celda contiene este valor, no se enviará el mensaje</small>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className={estilos.seccionFormulario}>
-                                    <h3>Mensajes Automáticos</h3>
+                                    <h3>Mensaje de Bienvenida</h3>
                                     
                                     <div className={estilos.campoFormulario}>
                                         <label>Mensaje de Bienvenida *</label>
@@ -808,68 +903,32 @@ export default function AsignacionComponent({
                                             value={formAsignacion.mensaje_bienvenida}
                                             onChange={(e) => setFormAsignacion({...formAsignacion, mensaje_bienvenida: e.target.value})}
                                             placeholder="Mensaje que se enviará a nuevos contactos"
-                                            rows="3"
+                                            rows="4"
                                             required
-                                            className={estilos.textarea}
-                                        />
-                                    </div>
-
-                                    <div className={estilos.campoFormulario}>
-                                        <label>Mensaje de Seguimiento (opcional)</label>
-                                        <textarea
-                                            value={formAsignacion.mensaje_seguimiento}
-                                            onChange={(e) => setFormAsignacion({...formAsignacion, mensaje_seguimiento: e.target.value})}
-                                            placeholder="Mensaje de seguimiento después del primer contacto"
-                                            rows="3"
-                                            className={estilos.textarea}
-                                        />
-                                    </div>
-
-                                    <div className={estilos.campoFormulario}>
-                                        <label>Mensaje Promocional (opcional)</label>
-                                        <textarea
-                                            value={formAsignacion.mensaje_promocional}
-                                            onChange={(e) => setFormAsignacion({...formAsignacion, mensaje_promocional: e.target.value})}
-                                            placeholder="Mensaje promocional o de ofertas especiales"
-                                            rows="3"
                                             className={estilos.textarea}
                                         />
                                     </div>
                                     
                                     <div className={estilos.variablesAyuda}>
                                         <ion-icon name="information-circle-outline"></ion-icon>
-                                        <span>Puedes usar {'{nombre}'} en tus mensajes para personalizar</span>
+                                        <span>Puedes usar {'{nombre}'} en tu mensaje para personalizar</span>
                                     </div>
                                 </div>
 
                                 <div className={estilos.seccionFormulario}>
                                     <h3>Configuración de Envío</h3>
                                     
-                                    <div className={estilos.camposGrupo}>
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Tipo de Envío</label>
-                                            <select
-                                                value={formAsignacion.tipo_envio}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, tipo_envio: e.target.value})}
-                                                className={estilos.selector}
-                                            >
-                                                <option value="bienvenida">Solo Bienvenida</option>
-                                                <option value="seguimiento">Bienvenida + Seguimiento</option>
-                                                <option value="promocional">Todos los Mensajes</option>
-                                            </select>
-                                        </div>
-
-                                        <div className={estilos.campoFormulario}>
-                                            <label>Intervalo entre Mensajes (horas)</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="168"
-                                                value={formAsignacion.intervalo_horas}
-                                                onChange={(e) => setFormAsignacion({...formAsignacion, intervalo_horas: parseInt(e.target.value)})}
-                                                className={estilos.input}
-                                            />
-                                        </div>
+                                    <div className={estilos.campoFormulario}>
+                                        <label>Intervalo entre Mensajes (horas)</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="168"
+                                            value={formAsignacion.intervalo_horas}
+                                            onChange={(e) => setFormAsignacion({...formAsignacion, intervalo_horas: parseInt(e.target.value)})}
+                                            className={estilos.input}
+                                        />
+                                        <small>Tiempo mínimo entre envíos al mismo número</small>
                                     </div>
                                     
                                     <div className={estilos.campoFormulario}>
