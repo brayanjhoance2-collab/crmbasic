@@ -98,50 +98,78 @@ export default function LuckysheetComponent({
                 return
             }
 
+            // Usar CDN alternativo más confiable
+            const baseUrl = 'https://unpkg.com/luckysheet@2.1.13/dist'
+            
             // Verificar y cargar CSS
             const cssFiles = [
-                'https://cdn.luckysheet.com/luckysheet/0.2.61/plugins/css/pluginsCss.css',
-                'https://cdn.luckysheet.com/luckysheet/0.2.61/plugins/plugins.css', 
-                'https://cdn.luckysheet.com/luckysheet/0.2.61/css/luckysheet.css',
-                'https://cdn.luckysheet.com/luckysheet/0.2.61/assets/iconfont/iconfont.css'
+                `${baseUrl}/plugins/css/pluginsCss.css`,
+                `${baseUrl}/plugins/plugins.css`, 
+                `${baseUrl}/css/luckysheet.css`,
+                `${baseUrl}/assets/iconfont/iconfont.css`
             ]
+
+            let cssLoaded = 0
+            const totalCss = cssFiles.length
 
             cssFiles.forEach(href => {
                 if (!document.querySelector(`link[href="${href}"]`)) {
                     const link = document.createElement('link')
                     link.rel = 'stylesheet'
                     link.href = href
+                    link.onload = () => {
+                        cssLoaded++
+                        setLoadingMessage(`Cargando estilos ${cssLoaded}/${totalCss}...`)
+                    }
+                    link.onerror = () => {
+                        console.log('Error cargando CSS:', href)
+                        cssLoaded++
+                    }
                     document.head.appendChild(link)
+                } else {
+                    cssLoaded++
                 }
             })
 
-            // Cargar JS
-            if (!document.querySelector('script[src*="luckysheet"]')) {
-                setLoadingMessage('Cargando plugins...')
-                const script1 = document.createElement('script')
-                script1.src = 'https://cdn.luckysheet.com/luckysheet/0.2.61/plugins/js/plugin.js'
-                script1.onload = () => {
-                    setLoadingMessage('Cargando Luckysheet core...')
-                    const script2 = document.createElement('script')
-                    script2.src = 'https://cdn.luckysheet.com/luckysheet/0.2.61/luckysheet.umd.js'
-                    script2.onload = () => {
-                        console.log('Scripts cargados, esperando inicializacion...')
-                        setTimeout(() => {
-                            if (typeof window.luckysheet !== 'undefined') {
-                                resolve()
-                            } else {
-                                reject(new Error('Luckysheet no se cargo correctamente'))
-                            }
-                        }, 1000)
-                    }
-                    script2.onerror = () => reject(new Error('Error cargando luckysheet.umd.js'))
-                    document.head.appendChild(script2)
+            // Esperar que CSS se cargue antes de cargar JS
+            const waitForCss = () => {
+                if (cssLoaded >= totalCss) {
+                    loadJavaScript()
+                } else {
+                    setTimeout(waitForCss, 100)
                 }
-                script1.onerror = () => reject(new Error('Error cargando plugin.js'))
-                document.head.appendChild(script1)
-            } else {
-                setTimeout(resolve, 500)
             }
+
+            const loadJavaScript = () => {
+                if (!document.querySelector('script[src*="luckysheet"]')) {
+                    setLoadingMessage('Cargando plugins JS...')
+                    const script1 = document.createElement('script')
+                    script1.src = `${baseUrl}/plugins/js/plugin.js`
+                    script1.onload = () => {
+                        setLoadingMessage('Cargando Luckysheet core...')
+                        const script2 = document.createElement('script')
+                        script2.src = `${baseUrl}/luckysheet.umd.js`
+                        script2.onload = () => {
+                            console.log('Scripts cargados, esperando inicializacion...')
+                            setTimeout(() => {
+                                if (typeof window.luckysheet !== 'undefined') {
+                                    resolve()
+                                } else {
+                                    reject(new Error('Luckysheet no se cargo correctamente'))
+                                }
+                            }, 1500)
+                        }
+                        script2.onerror = () => reject(new Error('Error cargando luckysheet.umd.js'))
+                        document.head.appendChild(script2)
+                    }
+                    script1.onerror = () => reject(new Error('Error cargando plugin.js'))
+                    document.head.appendChild(script1)
+                } else {
+                    setTimeout(resolve, 500)
+                }
+            }
+
+            waitForCss()
         })
     }, [])
 
@@ -230,7 +258,7 @@ export default function LuckysheetComponent({
                     throw new Error('Luckysheet no se renderizo correctamente')
                 }
                 setIsLoading(false)
-            }, 2000)
+            }, 3000)
 
         } catch (error) {
             console.error('Error al inicializar Luckysheet:', error)
@@ -271,7 +299,7 @@ export default function LuckysheetComponent({
         }
 
         // Delay para asegurar que el DOM este listo
-        initTimeoutRef.current = setTimeout(init, 200)
+        initTimeoutRef.current = setTimeout(init, 300)
 
         return () => {
             if (initTimeoutRef.current) {
@@ -343,11 +371,38 @@ export default function LuckysheetComponent({
         }
     }
 
-    const reintentarCarga = () => {
+    const usarEditorSimple = () => {
         setError(null)
-        setIsLoading(true)
-        setIsInitialized(false)
-        window.location.reload()
+        setIsLoading(false)
+        setIsInitialized(true)
+        
+        // Crear una tabla HTML simple como fallback
+        if (containerRef.current) {
+            containerRef.current.innerHTML = `
+                <div class="${estilos.simpleTableContainer}">
+                    <p class="${estilos.simpleTableMessage}">
+                        <strong>Modo simple activado</strong><br>
+                        Mostrando datos en formato tabla básica
+                    </p>
+                    <table class="${estilos.simpleTable}">
+                        <thead>
+                            <tr>
+                                ${datos.length > 0 ? Object.keys(datos[0]).map(header => 
+                                    `<th>${header}</th>`
+                                ).join('') : '<th>Sin datos</th>'}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${datos.map(fila => 
+                                `<tr>${Object.values(fila).map(valor => 
+                                    `<td contenteditable="true">${valor || ''}</td>`
+                                ).join('')}</tr>`
+                            ).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `
+        }
     }
 
     if (error) {
@@ -356,13 +411,22 @@ export default function LuckysheetComponent({
                 <ion-icon name="warning-outline"></ion-icon>
                 <p>Error al cargar Excel</p>
                 <span>{error}</span>
-                <button 
-                    onClick={reintentarCarga}
-                    className={`${estilos.button} ${estilos.buttonSecondary}`}
-                >
-                    <ion-icon name="refresh-outline"></ion-icon>
-                    Reintentar
-                </button>
+                <div className={estilos.errorButtons}>
+                    <button 
+                        onClick={usarEditorSimple}
+                        className={`${estilos.button} ${estilos.buttonInfo}`}
+                    >
+                        <ion-icon name="grid-outline"></ion-icon>
+                        Usar editor simple
+                    </button>
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className={`${estilos.button} ${estilos.buttonSecondary}`}
+                    >
+                        <ion-icon name="refresh-outline"></ion-icon>
+                        Reintentar
+                    </button>
+                </div>
             </div>
         )
     }

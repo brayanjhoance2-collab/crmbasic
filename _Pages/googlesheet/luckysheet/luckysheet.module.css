@@ -314,3 +314,86 @@
 .excelError .button {
     margin-top: 16px;
 }
+
+/* ESTILOS ADICIONALES PARA FALLBACK Y ERRORES - AGREGAR AL FINAL */
+
+.errorButtons {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.simpleTableContainer {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    padding: 16px;
+    background: white;
+}
+
+.simpleTableMessage {
+    margin: 0 0 16px 0;
+    padding: 12px;
+    background: #dbeafe;
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    color: #1e40af;
+    font-size: 14px;
+    text-align: center;
+}
+
+.simpleTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.simpleTable th {
+    background: #f8fafc;
+    color: #374151;
+    font-weight: 600;
+    padding: 12px 8px;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.simpleTable td {
+    padding: 8px;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    background: white;
+    transition: background-color 0.2s ease;
+}
+
+.simpleTable td:focus {
+    background: #f0f9ff;
+    outline: 2px solid #3b82f6;
+    color: #1e293b;
+}
+
+.simpleTable tr:hover td {
+    background: #f8fafc;
+}
+
+@media (max-width: 768px) {
+    .errorButtons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .simpleTable {
+        font-size: 13px;
+    }
+    
+    .simpleTable th,
+    .simpleTable td {
+        padding: 6px 4px;
+    }
+}
